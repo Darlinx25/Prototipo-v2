@@ -1,18 +1,16 @@
 package com.ioteste.control;
 
 public class Room {
-    private String name;
+    private String name; //name = sensor src
     private float expectedTemp;
-    private int energy;
-    private int switchId;
-    private String srcSensor;
+    private float energy;
+    private String switchURL;
 
-    public Room(String name, float expectedTemp, int energy, int switchId, String srcSensor) {
+    public Room(String name, float expectedTemp, float energy, String switchURL) {
         this.name = name;
         this.expectedTemp = expectedTemp;
         this.energy = energy;
-        this.switchId = switchId;
-        this.srcSensor = srcSensor;
+        this.switchURL = switchURL;
     }
 
     public String getName() {
@@ -23,15 +21,11 @@ public class Room {
         return expectedTemp;
     }
 
-    public int getEnergy() {
+    public float getEnergy() {
         return energy;
     }
 
-    public int getSwitchId() {
-        return switchId;
-    }
-
-    public String getSrcSensor() {
-        return srcSensor;
+    public String getSwitchURL() {
+        return switchURL;
     }
 }

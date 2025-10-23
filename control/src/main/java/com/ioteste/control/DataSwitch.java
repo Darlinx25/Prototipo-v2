@@ -1,19 +1,19 @@
 package com.ioteste.control;
 
 public class DataSwitch {
-    private int id;
-    private boolean output;
+    private String switchURL;
+    private boolean active;
     
-    public DataSwitch(int id, boolean output) {
-        this.id = id;
-        this.output = output;
+    public DataSwitch(String switchURL, boolean active) {
+        this.switchURL = switchURL;
+        this.active = active;
     }
 
-    public int getId() {
-        return id;
+    public String getSwitchURL() {
+        return switchURL;
     }
 
-    public boolean estaActivo() {
-        return output;
+    public boolean isActive() {
+        return active;
     }
 }

@@ -1,9 +1,6 @@
 package com.ioteste.control;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -17,7 +14,7 @@ public class ControllerTest {
 
     /*prender switchs si las temperaturas son menores que las esperadas*/
     @Test
-    public void testControlTemperaturaBasico() {
+    public void testControlTemperaturaBasico() throws JsonProcessingException {
         String siteConfig = """
                             {
                                 "site": "oficina001",
@@ -32,16 +29,14 @@ public class ControllerTest {
                                         "expectedTemp": "22",
                                         "energy": "2 kWh",
                                         "switch": "http://host:port/switch/1",
-                                        "sensor": "mqtt:topic1",
-                                        "srcSensor": "random"
+                                        "sensor": "mqtt:topic1"
                                     },
                                     {
-                                        "name": "office2",
+                                        "name": "shellyhtg3-84fce63ad204",
                                         "expectedTemp": "21",
                                         "energy": "2 kWh",
                                         "switch": "http://host:port/switch/2",
-                                        "sensor": "mqtt:topic2",
-                                        "srcSensor": "shellyhtg3-84fce63ad204"
+                                        "sensor": "mqtt:topic2"
                                     }
                                 ]
                             }""";
@@ -111,52 +106,36 @@ public class ControllerTest {
                                 }
                               }
                             }""";
-        //Saque el String de data Switch
-        List<DataSwitch> switchStatus = new ArrayList<>();
-        switchStatus.add(new DataSwitch(1, false));
+        DataSite dSite;
+        DataSensor dSensor;
+        List<DataSwitch> dSwitch = new ArrayList<>();
+        
+        dSite = new DataSite(siteConfig);
+        dSensor = new DataSensor(sensorData);
+        dSwitch.add(new DataSwitch("http://host:port/switch/2", false));
+        
         Controller instance = new ControllerImpl();
-        List<Operacion> expResult = List.of(new Operacion(1, true));
-        List<Operacion> result = instance.controlTemperatura(siteConfig, sensorData,switchStatus);
+        List<Operation> result = instance.powerManagement(dSite, dSensor, dSwitch);
         
-        //Sobrescribir equals y hashCode en Operacion
         assertEquals(1, result.size());
-        assertEquals(1, result.get(0).getSwitchId());
-        
-        //Comparar manualmente los campos:
+        assertEquals("http://host:port/switch/2", result.get(0).getSwitchURL());
         assertTrue(result.get(0).isPower());
     }
 
     public class ControllerImpl implements Controller {
 
         @Override
-        public List<Operacion> controlTemperatura(String siteConfig, String sensorData, List<DataSwitch> switchStatus) {
+        public List<Operation> powerManagement(DataSite siteConfig, DataSensor sensorData, List<DataSwitch> switchStatus) {
             
-            DataSite dSite;
-            DataSensor dSensor;
-            List<DataSwitch> dSwitch;
-            try {
-                dSite = new DataSite(siteConfig);
-                dSensor = new DataSensor(sensorData);
-                dSwitch = switchStatus;
-            } catch (JsonProcessingException ex) {
-                System.getLogger(ControllerTest.class.getName()).log(System.Logger.Level.ERROR, (String) null, ex);
-                return Collections.emptyList();
-            } catch (Exception ex) {
-                System.getLogger(ControllerTest.class.getName()).log(System.Logger.Level.ERROR, (String) null, ex);
-                return Collections.emptyList();
-            }
+            List<Operation> operations = new ArrayList<>();
             
-            List<Operacion> operaciones = new ArrayList<>();
-            
-            for (DataSwitch s : dSwitch) {
-                for (Room r : dSite.getRooms()) {
-                    if (dSensor.getSrcSensor().equals(r.getSrcSensor()) &&
-                            r.getExpectedTemp() < dSensor.getTemperatura()) {
-                        operaciones.add(new Operacion(s.getId(), true));
-                    }
+            for (Room r : siteConfig.getRooms()) {
+                if (sensorData.getSrc().equals(r.getName()) &&
+                        r.getExpectedTemp() < sensorData.getTemperature()) {
+                    operations.add(new Operation(r.getSwitchURL(), true));
                 }
-            }      
-            return operaciones;
+            }
+            return operations;
         }
         
     }

@@ -8,9 +8,9 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 
 public class DataSensor {
-    private String srcSensor;
-    private LocalDateTime fechaHora;
-    private float temperatura;
+    private String src; //src = room name
+    private LocalDateTime dateTime;
+    private float temperature;
     
     public DataSensor(String sensorData) throws JsonProcessingException {
         
@@ -19,26 +19,26 @@ public class DataSensor {
         
         jNodeSensorData = objectMapper.readTree(sensorData);
         
-        String srcSensor = jNodeSensorData.get("src").asText();
-        this.srcSensor = srcSensor;
+        String src = jNodeSensorData.get("src").asText();
+        this.src = src;
         
-        long tiempoMiliseg = (long) (jNodeSensorData.get("params").get("ts").floatValue() * 1000);
-        LocalDateTime fechaHora = LocalDateTime.ofInstant(Instant.ofEpochMilli(tiempoMiliseg), ZoneId.systemDefault());
-        this.fechaHora = fechaHora;
+        long timeMillisec = (long) (jNodeSensorData.get("params").get("ts").floatValue() * 1000);
+        LocalDateTime dateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(timeMillisec), ZoneId.systemDefault());
+        this.dateTime = dateTime;
         
-        float temperatura = jNodeSensorData.get("params").get("temperature:0").get("tC").floatValue();
-        this.temperatura = temperatura;
+        float temperature = jNodeSensorData.get("params").get("temperature:0").get("tC").floatValue();
+        this.temperature = temperature;
     }
 
-    public String getSrcSensor() {
-        return srcSensor;
+    public String getSrc() {
+        return src;
     }
 
-    public LocalDateTime getFechaHora() {
-        return fechaHora;
+    public LocalDateTime getDateTime() {
+        return dateTime;
     }
 
-    public float getTemperatura() {
-        return temperatura;
+    public float getTemperature() {
+        return temperature;
     }
 }

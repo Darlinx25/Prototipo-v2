@@ -8,10 +8,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class DataSite {
-    private int maxEnergy;
+    private float maxEnergy;
     private List<Room> rooms;
     
-    public DataSite(String siteConfig) throws JsonProcessingException, Exception {
+    public DataSite(String siteConfig) throws JsonProcessingException {
         
         ObjectMapper objectMapper = new ObjectMapper();
         JsonNode jNodeSiteConfig;
@@ -19,17 +19,17 @@ public class DataSite {
         jNodeSiteConfig = objectMapper.readTree(siteConfig);
         
         String strMaxEnergy = jNodeSiteConfig.get("maxEnergy").asText();
-        int maxEnergy;
-        int primerEspacio = strMaxEnergy.indexOf(' ');
-        if (primerEspacio != -1) {
-            maxEnergy = Integer.parseInt(strMaxEnergy.substring(0, primerEspacio));
+        float maxEnergy;
+        int firstSpace = strMaxEnergy.indexOf(' ');
+        if (firstSpace != -1) {
+            maxEnergy = Float.parseFloat(strMaxEnergy.substring(0, firstSpace));
         } else {
-            maxEnergy = Integer.parseInt(strMaxEnergy);
+            maxEnergy = Float.parseFloat(strMaxEnergy);
         }
         this.maxEnergy = maxEnergy;
         
         JsonNode roomsJson = jNodeSiteConfig.get("rooms");
-        List<Room> listaRoom = new ArrayList<>();
+        List<Room> roomList = new ArrayList<>();
             
         if (roomsJson.isArray()) {
             ArrayNode arrayNode = (ArrayNode) roomsJson;
@@ -39,32 +39,23 @@ public class DataSite {
                 float expectedTemp = nodoRoom.get("expectedTemp").floatValue();
                 
                 String strEnergy = nodoRoom.get("energy").asText();
-                int energy;
-                int primerEspacio2 = strEnergy.indexOf(' ');
-                if (primerEspacio2 != -1) {
-                    energy = Integer.parseInt(strEnergy.substring(0, primerEspacio2));
+                float energy;
+                int firstSpace2 = strEnergy.indexOf(' ');
+                if (firstSpace2 != -1) {
+                    energy = Float.parseFloat(strEnergy.substring(0, firstSpace2));
                 } else {
-                    energy = Integer.parseInt(strEnergy);
+                    energy = Float.parseFloat(strEnergy);
                 }
                 
-                int switchId;
-                String switchy = nodoRoom.get("switch").asText();
-                int ultimoIndex = switchy.lastIndexOf('/');
-                if (ultimoIndex != -1) {
-                    switchId = Integer.parseInt(switchy.substring(ultimoIndex + 1));
-                } else {
-                    throw new Exception("Error al parsear switchID, formato no esperado");
-                }
+                String switchURL  = nodoRoom.get("switch").asText();
                 
-                String srcSensor = nodoRoom.get("srcSensor").asText();
-                
-                listaRoom.add(new Room(name, expectedTemp, energy, switchId, srcSensor));
+                roomList.add(new Room(name, expectedTemp, energy, switchURL));
             }
         }
-        this.rooms = listaRoom;
+        this.rooms = roomList;
     }
 
-    public int getMaxEnergy() {
+    public float getMaxEnergy() {
         return maxEnergy;
     }
 
