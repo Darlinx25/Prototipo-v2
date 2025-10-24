@@ -35,7 +35,7 @@
         </dependency>
     </dependencies>
     <properties>
-        <maven.compiler.release>21</maven.compiler.release>
+        <maven.compiler.release>24</maven.compiler.release>
         <exec.mainClass>com.ioteste.control.Control</exec.mainClass>
     </properties>
 </project>

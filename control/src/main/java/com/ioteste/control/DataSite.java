@@ -36,7 +36,8 @@ public class DataSite {
 
             for (JsonNode nodoRoom : arrayNode) {
                 String name = nodoRoom.get("name").asText();
-                float expectedTemp = nodoRoom.get("expectedTemp").floatValue();
+                String expectedTempStr = nodoRoom.get("expectedTemp").asText();
+                float expectedTemp = Float.parseFloat(expectedTempStr);
                 
                 String strEnergy = nodoRoom.get("energy").asText();
                 float energy;
