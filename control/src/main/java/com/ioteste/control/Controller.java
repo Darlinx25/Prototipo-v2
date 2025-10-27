@@ -1,14 +1,10 @@
 package com.ioteste.control;
 
-import java.util.List;
-
 public interface Controller {
 
     /**
      *
-     * @param siteConfig
-     * @param sensorData
-     * @param switchStatus
+     * @param appData
      */
-    public List<Operation> powerManagement(DataSite siteConfig, DataSensor sensorData, List<DataSwitch> switchStatus);
+    public ControlResponse powerManagement(AppData appData);
 }

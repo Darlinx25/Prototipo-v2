@@ -108,17 +108,20 @@ public class ControllerTest {
         DataSite dSite;
         DataSensor dSensor;
         List<DataSwitch> dSwitch = new ArrayList<>();
+        Context context = new Context();
         
         dSite = new DataSite(siteConfig);
         dSensor = new DataSensor(sensorData);
         dSwitch.add(new DataSwitch("http://host:port/switch/2", false));
         
-        Controller instance = new ControllerImpl();
-        List<Operation> result = instance.powerManagement(dSite, dSensor, dSwitch);
+        AppData appData = new AppData(dSite, dSensor, dSwitch, context);
         
-        assertEquals(1, result.size());
-        assertEquals("http://host:port/switch/2", result.get(0).getSwitchURL());
-        assertTrue(result.get(0).isPower());
+        Controller instance = new ControllerImpl();
+        ControlResponse result = instance.powerManagement(appData);
+        
+        assertEquals(1, result.getOperations().size());
+        assertEquals("http://host:port/switch/2", result.getOperations().get(0).getSwitchURL());
+        assertTrue(result.getOperations().get(0).isPower());
     }
     
     
@@ -218,17 +221,20 @@ public class ControllerTest {
         DataSite dSite;
         DataSensor dSensor;
         List<DataSwitch> dSwitch = new ArrayList<>();
+        Context context = new Context();
         
         dSite = new DataSite(siteConfig);
         dSensor = new DataSensor(sensorData);
         dSwitch.add(new DataSwitch("http://host:port/switch/2", false));
         
-        Controller instance = new ControllerImpl();
-        List<Operation> result = instance.powerManagement(dSite, dSensor, dSwitch);
+        AppData appData = new AppData(dSite, dSensor, dSwitch, context);
         
-        assertEquals(1, result.size());
-        assertEquals("http://host:port/switch/2", result.get(0).getSwitchURL());
-        assertFalse(result.get(0).isPower());
+        Controller instance = new ControllerImpl();
+        ControlResponse result = instance.powerManagement(appData);
+        
+        assertEquals(1, result.getOperations().size());
+        assertEquals("http://host:port/switch/2", result.getOperations().get(0).getSwitchURL());
+        assertFalse(result.getOperations().get(0).isPower());
     }
     
     @Test
@@ -327,24 +333,31 @@ public class ControllerTest {
         DataSite dSite;
         DataSensor dSensor;
         List<DataSwitch> dSwitch = new ArrayList<>();
+        Context context = new Context();
         
         dSite = new DataSite(siteConfig);
         dSensor = new DataSensor(sensorData);
         dSwitch.add(new DataSwitch("http://host:port/switch/1", true));
         dSwitch.add(new DataSwitch("http://host:port/switch/2", false));
         
-        Controller instance = new ControllerImpl();
-        List<Operation> result = instance.powerManagement(dSite, dSensor, dSwitch);
+        AppData appData = new AppData(dSite, dSensor, dSwitch, context);
         
-        assertEquals(1, result.size());
-        assertEquals("http://host:port/switch/2", result.get(0).getSwitchURL());
-        assertFalse(result.get(0).isPower());
+        Controller instance = new ControllerImpl();
+        ControlResponse result = instance.powerManagement(appData);
+        
+        assertEquals(1, result.getOperations().size());
+        assertEquals("http://host:port/switch/2", result.getOperations().get(0).getSwitchURL());
+        assertFalse(result.getOperations().get(0).isPower());
     }
     
     public class ControllerImpl implements Controller {
 
         @Override
-        public List<Operation> powerManagement(DataSite siteConfig, DataSensor sensorData, List<DataSwitch> switchStatus) {
+        public ControlResponse powerManagement(AppData appData) {
+            DataSite siteConfig = appData.getSiteConfig();
+            DataSensor sensorData = appData.getSensorData();
+            List<DataSwitch> switchStatus = appData.getSwitchStatus();
+            Context context = appData.getContext();
             
             List<Operation> operations = new ArrayList<>();
             
@@ -363,7 +376,7 @@ public class ControllerTest {
                     }
                 }  
             }
-            return operations;
+            return new ControlResponse(operations, context);
         }
         
         private float getCurrentEnergy(DataSite siteConfig, List<DataSwitch> switchStatus) {
