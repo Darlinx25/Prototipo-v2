@@ -23,7 +23,7 @@ public class ControllerTest {
     
     /*prender switch si la temperatura es menor que la esperada*/
     @Test
-    public void testSwitchTurnsOn() throws JsonProcessingException {
+    public void testSwitchTurnsOn() {
         appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/2", false));
         ControlResponse result = instance.powerManagement(appData);
         
