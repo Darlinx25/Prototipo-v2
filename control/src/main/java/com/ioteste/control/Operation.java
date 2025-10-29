@@ -13,7 +13,7 @@ public class Operation {
         return switchURL;
     }
 
-    public boolean isPower() {
+    public boolean getPower() {
         return power;
     }
     

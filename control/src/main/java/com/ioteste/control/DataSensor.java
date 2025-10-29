@@ -41,4 +41,18 @@ public class DataSensor {
     public float getTemperature() {
         return temperature;
     }
+
+    public void setSrc(String src) {
+        this.src = src;
+    }
+
+    public void setDateTime(LocalDateTime dateTime) {
+        this.dateTime = dateTime;
+    }
+
+    public void setTemperature(float temperature) {
+        this.temperature = temperature;
+    }
+    
+    
 }

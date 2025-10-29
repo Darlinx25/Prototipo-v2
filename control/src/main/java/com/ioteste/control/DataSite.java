@@ -63,4 +63,14 @@ public class DataSite {
     public List<Room> getRooms() {
         return rooms;
     }
+
+    public void setMaxEnergy(float maxEnergy) {
+        this.maxEnergy = maxEnergy;
+    }
+
+    public void setRooms(List<Room> rooms) {
+        this.rooms = rooms;
+    }
+    
+    
 }
