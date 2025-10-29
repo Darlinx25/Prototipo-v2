@@ -1,10 +1,14 @@
 package com.ioteste.control;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import java.time.DayOfWeek;
+import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 
 public class ControllerTest {
@@ -14,16 +18,33 @@ public class ControllerTest {
     
     private AppData appData;
     private Controller instance;
+    private static LocalDateTime notPeakHours12;
+    private static LocalDateTime notPeakHours23;
+    private static LocalDateTime notPeakHoursWeekend;
+    private static LocalDateTime peakHours17;
+    private static LocalDateTime peakHours22;
 
+    @BeforeAll
+    public static void setup() {
+        notPeakHours12 = LocalDateTime.of(2025, Month.NOVEMBER, 3, 12, 0, 0);
+        notPeakHours23 = LocalDateTime.of(2025, Month.NOVEMBER, 3, 23, 0, 0);
+        notPeakHoursWeekend = LocalDateTime.of(2025, Month.NOVEMBER, 2, 17, 0, 0);
+        peakHours17 = LocalDateTime.of(2025, Month.NOVEMBER, 3, 17, 0, 0);
+        peakHours22 = LocalDateTime.of(2025, Month.NOVEMBER, 3, 22, 59, 59);
+    }
+    
     @BeforeEach
     void init() {
         appData = getAppDataTemplate();
         instance = new ControllerImpl();
+        
     }
     
     /*prender switch si la temperatura es menor que la esperada*/
     @Test
     public void testSwitchTurnsOn() {
+        appData.setContext(new Context(notPeakHours12));
+        appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/1", true));
         appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/2", false));
         ControlResponse result = instance.powerManagement(appData);
         
@@ -36,8 +57,10 @@ public class ControllerTest {
     /*apagar switch si la temperatura es mayor o igual que la esperada*/
     @Test
     public void testSwitchTurnsOff() {
+        appData.setContext(new Context(notPeakHours12));
         appData.getSensorData().setTemperature(22);
-        appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/2", false));
+        appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/1", false));
+        appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/2", true));
         ControlResponse result = instance.powerManagement(appData);
         
         assertEquals(1, result.getOperations().size());
@@ -48,6 +71,7 @@ public class ControllerTest {
     /*no prender switch aunque la temperatura sea baja si esto causa un apagón*/
     @Test
     public void testAboveMaxEnergy() {
+        appData.setContext(new Context(notPeakHours23));
         List<Room> rooms = new ArrayList<>();
         rooms.add(new Room("office1", 22, 8, "http://host:port/switch/1"));
         rooms.add(new Room("shellyhtg3-84fce63ad204", 21, 8, "http://host:port/switch/2"));
@@ -61,6 +85,40 @@ public class ControllerTest {
         assertFalse(result.getOperations().get(0).getPower());
     }
     
+    /*no operaciones si el sensor src no corresponde a ningún room*/
+    @Test
+    public void testNoMatchingRoom() {
+        appData.setContext(new Context(notPeakHoursWeekend));
+        appData.getSensorData().setSrc("unknown room");
+        appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/1", false));
+        appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/2", false));
+        ControlResponse result = instance.powerManagement(appData);
+
+        assertTrue(result.getOperations().isEmpty());
+    }
+    
+    /*apagar los switches en horario punta*/
+    @Test
+    public void testPeakHours() {
+        appData.setContext(new Context(peakHours17));
+        appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/1", true));
+        appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/2", true));
+        ControlResponse result = instance.powerManagement(appData);
+        
+        assertEquals(2, result.getOperations().size());
+        assertFalse(result.getOperations().get(0).getPower());
+        assertFalse(result.getOperations().get(1).getPower());
+        
+        
+        appData.setContext(new Context(peakHours22));
+        result = instance.powerManagement(appData);
+        
+        assertEquals(2, result.getOperations().size());
+        assertFalse(result.getOperations().get(0).getPower());
+        assertFalse(result.getOperations().get(1).getPower());
+    }
+    
+    
     public class ControllerImpl implements Controller {
 
         @Override
@@ -71,6 +129,15 @@ public class ControllerTest {
             Context context = appData.getContext();
             
             List<Operation> operations = new ArrayList<>();
+            
+            if (peakHours(context.getCurrentTime())) {
+                for (DataSwitch s : switchStatus) {
+                    if (s.isActive()) {
+                        operations.add(new Operation(s.getSwitchURL(), false));
+                    }
+                }
+                return new ControlResponse(operations, context);
+            }
             
             float currentEnergy = getCurrentEnergy(siteConfig, switchStatus);
             
@@ -111,6 +178,16 @@ public class ControllerTest {
                 }
             }
             return true;
+        }
+        
+        private boolean peakHours(LocalDateTime currentTime) {
+            boolean weekend = currentTime.getDayOfWeek() == DayOfWeek.SATURDAY ||
+                    currentTime.getDayOfWeek() == DayOfWeek.SUNDAY;
+            if (weekend || currentTime.getHour() < 17 || currentTime.getHour() == 23) {
+                return false;
+            } else {
+                return true;
+            }
         }
         
     }
@@ -210,7 +287,7 @@ public class ControllerTest {
         DataSite dSite;
         DataSensor dSensor;
         List<DataSwitch> dSwitch = new ArrayList<>();
-        Context context = new Context();
+        Context context = new Context(LocalDateTime.now());
         
         AppData appData;
         
