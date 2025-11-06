@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 
 public class DataSensor {
     private String src; //src = room name
@@ -22,8 +23,10 @@ public class DataSensor {
         String src = jNodeSensorData.get("src").asText();
         this.src = src;
         
-        long timeMillisec = (long) (jNodeSensorData.get("params").get("ts").floatValue() * 1000);
-        LocalDateTime dateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(timeMillisec), ZoneId.systemDefault());
+        double ts = jNodeSensorData.get("params").get("ts").asDouble();
+        long timeMillisec = (long) (ts * 1000);
+        LocalDateTime dateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(timeMillisec),ZoneOffset.UTC);
+
         this.dateTime = dateTime;
         
         float temperature = jNodeSensorData.get("params").get("temperature:0").get("tC").floatValue();
