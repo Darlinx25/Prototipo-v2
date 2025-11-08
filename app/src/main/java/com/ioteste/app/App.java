@@ -42,6 +42,7 @@ public class App {
         return response.body();
     }
     
+<<<<<<< HEAD
     private void start(){
         String brokerUrl = "tcp://mosquitto:1883";
         String topic = "habitacion/ambiente"; 
@@ -88,5 +89,7 @@ public class App {
     
     
     
+=======
+>>>>>>> a4e4de7 (implementacion defaultcontroller)
     
 }
