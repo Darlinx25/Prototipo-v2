@@ -36,7 +36,7 @@ public class ControllerTest {
     @BeforeEach
     void init() {
         appData = getAppDataTemplate();
-        instance = new ControllerImpl();
+        instance = new DefaultController();
         
     }
     
