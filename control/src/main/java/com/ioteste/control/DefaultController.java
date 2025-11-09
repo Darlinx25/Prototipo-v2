@@ -2,18 +2,17 @@ package com.ioteste.control;
 
 import java.time.DayOfWeek;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 
 public class DefaultController implements Controller {
 
     private boolean isPeakHours(LocalDateTime currentTime) {
-        boolean isWeekend = currentTime.getDayOfWeek() == DayOfWeek.SATURDAY ||
-                            currentTime.getDayOfWeek() == DayOfWeek.SUNDAY;
-        int hour = currentTime.getHour();
-        
-        return !isWeekend && hour >= 17 && hour < 23;
-    }
+    long ts = currentTime.atZone(ZoneOffset.UTC).toInstant().toEpochMilli();
+    EnergyCost.EnergyZone zone = EnergyCost.energyZone(EnergyCost.TEST_CONTRACT_30S, ts);
+    return zone.current() == EnergyCost.HIGH;
+}
 
     private float getCurrentEnergy(DataSite siteConfig, List<DataSwitch> switchStatus) {
         float currentEnergy = 0;

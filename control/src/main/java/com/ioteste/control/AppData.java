@@ -2,11 +2,13 @@ package com.ioteste.control;
 
 import java.util.List;
 
+
 public class AppData {
     private DataSite siteConfig;
     private DataSensor sensorData;
     private List<DataSwitch> switchStatus;
     private Context context;
+    
 
     public AppData(DataSite siteConfig, DataSensor sensorData, List<DataSwitch> switchStatus, Context context) {
         this.siteConfig = siteConfig;
