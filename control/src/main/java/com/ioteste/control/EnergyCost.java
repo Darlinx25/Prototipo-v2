@@ -1,15 +1,11 @@
-// energycost.java
 package com.ioteste.control;
 
-/**
- * Informa Costo de la Energía y cuando cambia de uno costo a otro.
- */
 public class EnergyCost {
 
     public final static String TEST_CONTRACT_30S = "testContract";
     public final static int LOW = 0;
     public final static int HIGH = 1;
-    private final static long ZONE_DURATION = 1000 * 60 * 30;
+    private final static long ZONE_DURATION = 1000 * 60; // 1 minuto (60000 ms)
 
     public record EnergyZone(int current, int next, long nextTS) {
     }

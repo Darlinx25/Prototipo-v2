@@ -66,12 +66,6 @@ public class DefaultController implements Controller {
                     if (currentEnergy + room.getEnergy() <= siteConfig.getMaxEnergy()) {
                         operations.add(new Operation(room.getSwitchURL(), true));
                         
-                        for (DataSwitch ds : switchStatus) {
-                            if (ds.getSwitchURL().equals(room.getSwitchURL())) {
-                                ds.setActive(true); 
-                                break;
-                            }
-                        }
                     } else {
                         operations.add(new Operation(room.getSwitchURL(), false));
                     }
@@ -80,12 +74,6 @@ public class DefaultController implements Controller {
                 else if (!desiredPower && isActiveSwitch) {
                     operations.add(new Operation(room.getSwitchURL(), false));
                     
-                    for (DataSwitch ds : switchStatus) {
-                        if (ds.getSwitchURL().equals(room.getSwitchURL())) {
-                            ds.setActive(false); 
-                            break;
-                        }
-                    }
                 }
                 
                 return new ControlResponse(operations, context);

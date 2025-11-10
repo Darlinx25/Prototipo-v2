@@ -10,6 +10,7 @@ import java.util.List;
 public class DataSite {
     private float maxEnergy;
     private List<Room> rooms;
+   
     
     public DataSite(String siteConfig) throws JsonProcessingException {
         
@@ -18,7 +19,7 @@ public class DataSite {
         
         jNodeSiteConfig = objectMapper.readTree(siteConfig);
         
-        // 1. Parsear MaxEnergy ("4 kWh" -> 4.0f)
+        
         String strMaxEnergy = jNodeSiteConfig.get("maxEnergy").asText();
         float maxEnergy;
         int firstSpace = strMaxEnergy.indexOf(' ');
@@ -29,7 +30,9 @@ public class DataSite {
         }
         this.maxEnergy = maxEnergy;
         
-        // 2. Parsear la lista de Rooms
+       
+        
+       
         JsonNode roomsJson = jNodeSiteConfig.get("rooms");
         List<Room> roomList = new ArrayList<>();
             
@@ -52,11 +55,14 @@ public class DataSite {
                 
                 String switchURL = nodoRoom.get("switch").asText();
                 
-                roomList.add(new Room(name, expectedTemp, energy, switchURL));
+               
+                roomList.add(new Room(name, expectedTemp, energy, switchURL)); 
             }
         }
         this.rooms = roomList;
     }
+    
+   
 
     public float getMaxEnergy() {
         return maxEnergy;

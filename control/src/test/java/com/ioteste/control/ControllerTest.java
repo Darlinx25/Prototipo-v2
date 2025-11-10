@@ -26,7 +26,7 @@ public class ControllerTest {
     @BeforeAll
     public static void setup() {
         long now = System.currentTimeMillis();
-        final long ZONE_DURATION = 1000 * 60 * 30; 
+        final long ZONE_DURATION = 1000 * 60; // CORRECCIÓN: Sincronizado a 1 minuto (60 segundos)
 
         long currentZoneBaseTS = now / ZONE_DURATION * ZONE_DURATION;
         
@@ -232,5 +232,4 @@ public class ControllerTest {
             return null;
         }
     }
-
 }

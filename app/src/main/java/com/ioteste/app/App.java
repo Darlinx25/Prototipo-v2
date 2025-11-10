@@ -26,7 +26,6 @@ public class App {
     private Controller controller = new DefaultController();
     private DataSite siteConfig;
 
-    // VARIABLE PARA PERSISTIR EL ESTADO CONOCIDO DE LOS SWITCHES
     private List<DataSwitch> knownSwitchStatus = new ArrayList<>();
 
     public static void main(String[] args) {
@@ -34,7 +33,6 @@ public class App {
         myApp.start();
     }
 
-    // Método simulado que siempre retorna "off" (o falla)
     private String getSwitchStatus(String switchURL) throws IOException, InterruptedException {
         if (switchURL.contains("http://host:port/")) {
             if (switchURL.endsWith("/switch/2") && Math.random() < 0.2) {
@@ -85,7 +83,6 @@ public class App {
             return;
         }
 
-        // INICIALIZACIÓN DEL ESTADO PERSISTENTE
         this.knownSwitchStatus = getInitialSwitchesStatus();
 
         String brokerUrl = "tcp://ioteste-broker:1883";
@@ -114,7 +111,7 @@ public class App {
                     }
 
                     @Override
-                    public void messageArrived(String topic, MqttMessage message) throws Exception { // **CORRECCIÓN CLAVE**
+                    public void messageArrived(String topic, MqttMessage message) throws Exception {  
                         String payload = new String(message.getPayload());
                         handleSensorMessage(payload);
                     }
@@ -159,7 +156,7 @@ public class App {
         String siteConfigJson = """
                                 {
                                     "site": "oficina001",
-                                    "maxEnergy": "4 kWh", 
+                                    "maxEnergy": "3 kWh",  
                                     "timeSlot": {
                                         "contractType":"std",
                                         "refreshPeriod":"10000 ms"
@@ -188,15 +185,21 @@ public class App {
         try {
             DataSensor sensorData = new DataSensor(payload);
 
-            // USAR EL ESTADO PERSISTENTE
             Context context = new Context(LocalDateTime.now());
             AppData appData = new AppData(siteConfig, sensorData, this.knownSwitchStatus, context);
-
+            
+             
+            
+            System.out.println("--- INICIO DE PROCESAMIENTO ---");
+            
+            System.out.printf("⏰ Hora actual: %s\n", context.getCurrentTime()); 
+            System.out.println("-------------------------------");
+            
+            
             ControlResponse response = controller.powerManagement(appData);
 
             executeOperations(response.getOperations());
 
-            // ACTUALIZAR EL ESTADO PERSISTENTE DESPUÉS DE LA EJECUCIÓN DEL CONTROLADOR
             for (Operation op : response.getOperations()) {
                 for (DataSwitch ds : this.knownSwitchStatus) {
                     if (ds.getSwitchURL().equals(op.getSwitchURL())) {
@@ -212,7 +215,6 @@ public class App {
         }
     }
 
-    // MÉTODO MODIFICADO: Solo se usa para obtener el estado INICIAL
     private List<DataSwitch> getInitialSwitchesStatus() {
         List<DataSwitch> switches = new ArrayList<>();
         if (siteConfig == null) {
@@ -241,25 +243,16 @@ public class App {
     }
 
     private void executeOperations(List<Operation> operations) {
-    for (Operation op : operations) {
-        String jsonCommand = createSwitchCommand(op.getPower());
-        try {
-            String response = postSwitchOp(op.getSwitchURL(), jsonCommand);
-            System.out.printf("Comando OK: %s -> Power: %s\n", op.getSwitchURL(), op.getPower());
-            
-            
-            for (DataSwitch ds : this.knownSwitchStatus) {
-                if (ds.getSwitchURL().equals(op.getSwitchURL())) {
-                    ds.setActive(op.getPower()); 
-                    break;
-                }
+        for (Operation op : operations) {
+            String jsonCommand = createSwitchCommand(op.getPower());
+            try {
+                String response = postSwitchOp(op.getSwitchURL(), jsonCommand);
+                System.out.printf("Comando OK: %s -> Power: %s\n", op.getSwitchURL(), op.getPower());
+            } catch (Exception e) {
+                System.err.printf("Falla REST al enviar comando a switch %s.\n", op.getSwitchURL());
             }
-
-        } catch (Exception e) {
-            System.err.printf("Falla REST al enviar comando a switch %s.\n", op.getSwitchURL());
         }
     }
-}
 
     private String createSwitchCommand(boolean power) {
         String state = power ? "on" : "off";
