@@ -8,6 +8,7 @@
     </parent>
     <artifactId>app</artifactId>
     <packaging>jar</packaging>
+    
     <dependencies>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -28,11 +29,37 @@
         <dependency>
             <groupId>com.ioteste</groupId>
             <artifactId>control</artifactId>
-            <version>${project.version}</version> 
+            <version>${project.version}</version>
         </dependency>
     </dependencies>
+    
     <properties>
-        <maven.compiler.release>24</maven.compiler.release>
         <exec.mainClass>com.ioteste.app.App</exec.mainClass>
-    </properties>
-</project>
+        </properties>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.3</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>${exec.mainClass}</mainClass>
+                                </transformer>
+                            </transformers>
+                            <finalName>app</finalName>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+    </project>

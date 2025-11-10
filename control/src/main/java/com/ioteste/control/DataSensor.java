@@ -5,57 +5,65 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.time.ZoneOffset;
 
 public class DataSensor {
-    private String src; //src = room name
-    private LocalDateTime dateTime;
+
+    private String room;
     private float temperature;
-    
-    public DataSensor(String sensorData) throws JsonProcessingException {
-        
-        ObjectMapper objectMapper = new ObjectMapper();
-        JsonNode jNodeSensorData;
-        
-        jNodeSensorData = objectMapper.readTree(sensorData);
-        
-        String src = jNodeSensorData.get("src").asText();
-        this.src = src;
-        
-        double ts = jNodeSensorData.get("params").get("ts").asDouble();
-        long timeMillisec = (long) (ts * 1000);
-        LocalDateTime dateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(timeMillisec),ZoneOffset.UTC);
+    private float humidity;
+    private LocalDateTime dateTime;
 
-        this.dateTime = dateTime;
-        
-        float temperature = jNodeSensorData.get("params").get("temperature:0").get("tC").floatValue();
-        this.temperature = temperature;
+    public DataSensor(String sensorJson) throws JsonProcessingException {
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode root = mapper.readTree(sensorJson);
+
+        this.room = root.get("room").asText(); 
+        this.temperature = root.get("temperature").floatValue();
+        this.humidity = root.get("humidity").floatValue();
+
+        JsonNode timestampNode = root.get("timestamp");
+
+        if (timestampNode != null && timestampNode.isIntegralNumber()) {
+            long epochSeconds = timestampNode.asLong();
+            this.dateTime = LocalDateTime.ofInstant(
+                Instant.ofEpochSecond(epochSeconds), 
+                ZoneOffset.UTC
+            );
+        } else {
+            this.dateTime = LocalDateTime.now(ZoneOffset.UTC); 
+        }
     }
 
-    public String getSrc() {
-        return src;
-    }
-
-    public LocalDateTime getDateTime() {
-        return dateTime;
+    public String getRoom() {
+        return room;
     }
 
     public float getTemperature() {
         return temperature;
     }
 
-    public void setSrc(String src) {
-        this.src = src;
+    public float getHumidity() {
+        return humidity;
     }
 
-    public void setDateTime(LocalDateTime dateTime) {
-        this.dateTime = dateTime;
+    public LocalDateTime getDateTime() {
+        return dateTime;
+    }
+
+    public void setRoom(String room) {
+        this.room = room;
     }
 
     public void setTemperature(float temperature) {
         this.temperature = temperature;
     }
-    
-    
+
+    public void setHumidity(float humidity) {
+        this.humidity = humidity;
+    }
+
+    public void setDateTime(LocalDateTime dateTime) {
+        this.dateTime = dateTime;
+    }
 }

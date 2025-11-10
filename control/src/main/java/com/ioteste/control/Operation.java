@@ -1,3 +1,4 @@
+// operation.java
 package com.ioteste.control;
 
 public class Operation {
@@ -16,6 +17,4 @@ public class Operation {
     public boolean getPower() {
         return power;
     }
-    
-    
 }

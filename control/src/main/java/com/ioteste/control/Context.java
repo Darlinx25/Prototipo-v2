@@ -1,3 +1,4 @@
+// context.java
 package com.ioteste.control;
 
 import java.time.LocalDateTime;
@@ -12,7 +13,4 @@ public class Context {
     public LocalDateTime getCurrentTime() {
         return currentTime;
     }
-    
-    
-    
 }

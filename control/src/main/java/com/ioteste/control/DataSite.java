@@ -18,6 +18,7 @@ public class DataSite {
         
         jNodeSiteConfig = objectMapper.readTree(siteConfig);
         
+        // 1. Parsear MaxEnergy ("4 kWh" -> 4.0f)
         String strMaxEnergy = jNodeSiteConfig.get("maxEnergy").asText();
         float maxEnergy;
         int firstSpace = strMaxEnergy.indexOf(' ');
@@ -28,6 +29,7 @@ public class DataSite {
         }
         this.maxEnergy = maxEnergy;
         
+        // 2. Parsear la lista de Rooms
         JsonNode roomsJson = jNodeSiteConfig.get("rooms");
         List<Room> roomList = new ArrayList<>();
             
@@ -48,7 +50,7 @@ public class DataSite {
                     energy = Float.parseFloat(strEnergy);
                 }
                 
-                String switchURL  = nodoRoom.get("switch").asText();
+                String switchURL = nodoRoom.get("switch").asText();
                 
                 roomList.add(new Room(name, expectedTemp, energy, switchURL));
             }
@@ -71,6 +73,4 @@ public class DataSite {
     public void setRooms(List<Room> rooms) {
         this.rooms = rooms;
     }
-    
-    
 }

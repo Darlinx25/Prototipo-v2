@@ -1,6 +1,5 @@
 package com.ioteste.control;
 
-import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -9,10 +8,10 @@ import java.util.List;
 public class DefaultController implements Controller {
 
     private boolean isPeakHours(LocalDateTime currentTime) {
-    long ts = currentTime.atZone(ZoneOffset.UTC).toInstant().toEpochMilli();
-    EnergyCost.EnergyZone zone = EnergyCost.energyZone(EnergyCost.TEST_CONTRACT_30S, ts);
-    return zone.current() == EnergyCost.HIGH;
-}
+        long ts = currentTime.atZone(ZoneOffset.UTC).toInstant().toEpochMilli();
+        EnergyCost.EnergyZone zone = EnergyCost.energyZone(EnergyCost.TEST_CONTRACT_30S, ts);
+        return zone.current() == EnergyCost.HIGH;
+    }
 
     private float getCurrentEnergy(DataSite siteConfig, List<DataSwitch> switchStatus) {
         float currentEnergy = 0;
@@ -58,7 +57,7 @@ public class DefaultController implements Controller {
         float currentEnergy = getCurrentEnergy(siteConfig, switchStatus);
         
         for (Room room : siteConfig.getRooms()) {
-            if (sensorData.getSrc().equals(room.getName())) {
+            if (sensorData.getRoom().equals(room.getName())) {
                 
                 boolean isActiveSwitch = isActiveRoomSwitch(room, switchStatus);
                 boolean desiredPower = sensorData.getTemperature() < room.getExpectedTemp();
@@ -66,6 +65,13 @@ public class DefaultController implements Controller {
                 if (desiredPower && !isActiveSwitch) {
                     if (currentEnergy + room.getEnergy() <= siteConfig.getMaxEnergy()) {
                         operations.add(new Operation(room.getSwitchURL(), true));
+                        
+                        for (DataSwitch ds : switchStatus) {
+                            if (ds.getSwitchURL().equals(room.getSwitchURL())) {
+                                ds.setActive(true); 
+                                break;
+                            }
+                        }
                     } else {
                         operations.add(new Operation(room.getSwitchURL(), false));
                     }
@@ -73,7 +79,15 @@ public class DefaultController implements Controller {
                 }
                 else if (!desiredPower && isActiveSwitch) {
                     operations.add(new Operation(room.getSwitchURL(), false));
+                    
+                    for (DataSwitch ds : switchStatus) {
+                        if (ds.getSwitchURL().equals(room.getSwitchURL())) {
+                            ds.setActive(false); 
+                            break;
+                        }
+                    }
                 }
+                
                 return new ControlResponse(operations, context);
             }
         }

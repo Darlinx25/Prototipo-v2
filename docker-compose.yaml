@@ -1,24 +1,25 @@
+version: '3.8'
 
 services:
-  mqtt-broker:
-    image: eclipse-mosquitto:2
-    container_name: mqtt-broker
+  ioteste-broker:
+    image: eclipse-mosquitto:2.0
+    container_name: ioteste-broker
     ports:
-      - "1883:1883"     # Puerto MQTT
-      - "9001:9001"     # WebSocket (opcional)
+      - "1883:1883"
+    # Monta el archivo de configuración local para permitir conexiones anónimas
     volumes:
-      - ./mosquitto/config:/mosquitto/config
-      - ./mosquitto/data:/mosquitto/data
-      - ./mosquitto/log:/mosquitto/log
-    restart: unless-stopped
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+    restart: always
 
-  #si se llega a usar docker en la app principal
-  # app:
-  #   build: ./app
-  #   depends_on:
-  #     - mqtt-broker
-  #   environment:
-  #     - MQTT_BROKER_HOST=mqtt-broker
-  #     - MQTT_BROKER_PORT=1883
-  #   ports:
-  #     - "8080:8080"
+  ioteste-app:
+    build: .
+    container_name: ioteste-app
+    # Asegura que el contenedor de la aplicación se construya y se inicie
+    # después de que el broker haya sido iniciado.
+    depends_on:
+      ioteste-broker:
+        condition: service_started
+    restart: on-failure
+
+# Docker Compose creará una red interna llamada 'prototipo-v2_default'
+# donde 'ioteste-app' puede usar el nombre 'ioteste-broker' para conectarse.

@@ -56,10 +56,14 @@ public class ControllerTest {
     @Test
     public void testSwitchTurnsOn() {
         appData.setContext(new Context(notPeakHours12));
-        appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/1", true));
+        
+        // El sensor reporta temperatura de "shellyhtg3-84fce63ad204"
+        appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/1", false));
         appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/2", false));
+        
         ControlResponse result = instance.powerManagement(appData);
 
+        // Se espera que encienda switch/2 (sensor asociado)
         assertEquals(1, result.getOperations().size());
         assertEquals("http://host:port/switch/2", result.getOperations().get(0).getSwitchURL());
         assertTrue(result.getOperations().get(0).getPower());
@@ -69,11 +73,13 @@ public class ControllerTest {
     @Test
     public void testSwitchTurnsOff() {
         appData.setContext(new Context(notPeakHours23));
-        appData.getSensorData().setTemperature(22);
+        appData.getSensorData().setTemperature(22.0f); // Temperatura actual >= Esperada (21)
         appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/1", false));
         appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/2", true));
+        
         ControlResponse result = instance.powerManagement(appData);
 
+        // Se espera que apague switch/2 (sensor asociado)
         assertEquals(1, result.getOperations().size());
         assertEquals("http://host:port/switch/2", result.getOperations().get(0).getSwitchURL());
         assertFalse(result.getOperations().get(0).getPower());
@@ -82,25 +88,50 @@ public class ControllerTest {
     @Test
     public void testAboveMaxEnergy() {
         appData.setContext(new Context(notPeakHours23));
+        
         List<Room> rooms = new ArrayList<>();
-        rooms.add(new Room("office1", 22, 8, "http://host:port/switch/1"));
-        appData.getSensorData().setTemperature(19);
-        rooms.add(new Room("shellyhtg3-84fce63ad204", 21, 8, "http://host:port/switch/2")); 
+        rooms.add(new Room("office1", 22.0f, 8.0f, "http://host:port/switch/1"));
+        appData.getSensorData().setTemperature(19.0f);
+        rooms.add(new Room("shellyhtg3-84fce63ad204", 21.0f, 8.0f, "http://host:port/switch/2")); 
         appData.getSiteConfig().setRooms(rooms);
+        
         appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/1", true));
         appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/2", false));
-        appData.getSiteConfig().setMaxEnergy(14);
+        
+        // Carga Máxima = 14 kWh. Carga Actual = 8 kWh. Carga Deseada = 8 kWh.
+        // Carga Total si se enciende switch/2 = 8 + 8 = 16 kWh. (Mayor a 14 kWh)
+        appData.getSiteConfig().setMaxEnergy(14.0f); 
+        
         ControlResponse result = instance.powerManagement(appData);
 
+        // Se espera que bloquee el encendido y mantenga el switch/2 APAGADO.
         assertEquals(1, result.getOperations().size());
         assertEquals("http://host:port/switch/2", result.getOperations().get(0).getSwitchURL());
         assertFalse(result.getOperations().get(0).getPower()); 
+    }
+    
+    @Test
+    public void testAtMaxEnergyLimit() {
+        appData.setContext(new Context(notPeakHours12));
+        
+        // office1 (2 kWh) está encendido.
+        appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/1", true));
+        // shellyhtg3-84fce63ad204 (2 kWh) está apagado y necesita encenderse (Temp. baja por defecto).
+        appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/2", false)); 
+        
+        // Carga actual: 2 kWh. Carga total si se enciende switch/2: 2 + 2 = 4 kWh (Igual al límite).
+        
+        ControlResponse result = instance.powerManagement(appData);
+        
+        assertEquals(1, result.getOperations().size(), "Debe haber una operación de encendido.");
+        assertEquals("http://host:port/switch/2", result.getOperations().get(0).getSwitchURL());
+        assertTrue(result.getOperations().get(0).getPower(), "El switch debe encenderse, ya que la carga es exactamente igual al límite.");
     }
 
     @Test
     public void testNoMatchingRoom() {
         appData.setContext(new Context(notPeakHoursWeekend));
-        appData.getSensorData().setSrc("unknown room");
+        appData.getSensorData().setRoom("unknown room");
         appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/1", false));
         appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/2", false));
         ControlResponse result = instance.powerManagement(appData);
@@ -115,6 +146,7 @@ public class ControllerTest {
         appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/2", true));
         ControlResponse result1 = instance.powerManagement(appData);
 
+        // Se espera que apague los dos
         assertEquals(2, result1.getOperations().size());
         assertFalse(result1.getOperations().get(0).getPower());
         assertFalse(result1.getOperations().get(1).getPower());
@@ -130,100 +162,59 @@ public class ControllerTest {
         assertFalse(result2.getOperations().get(0).getPower());
         assertFalse(result2.getOperations().get(1).getPower());
     }
+    
+    @Test
+    public void testReactivationAfterPeakHours() {
+        appData.setContext(new Context(notPeakHours12));
+        
+        appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/1", false)); 
+        appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/2", false));
+        
+        // La temperatura es baja (19.9°C por defecto < 21°C esperada)
+        
+        ControlResponse result = instance.powerManagement(appData);
+
+        // Debería intentar encender el switch/2 (el que reporta la temperatura).
+        assertEquals(1, result.getOperations().size(), "Debe haber una operación de encendido.");
+        assertEquals("http://host:port/switch/2", result.getOperations().get(0).getSwitchURL());
+        assertTrue(result.getOperations().get(0).getPower(), "El switch debe encenderse para alcanzar la temperatura.");
+    }
 
 
     private AppData getAppDataTemplate() {
         String siteConfig = """
-                            {
-                                "site": "oficina001",
-                                "maxEnergy": "4 kWh", 
-                                "timeSlot": {
-                                  "contractType":"std",
-                                  "refreshPeriod":"10000 ms"
-                                  },
-                                "rooms": [
-                                    {
-                                        "name": "office1",
-                                        "expectedTemp": "22",
-                                        "energy": "2 kWh",
-                                        "switch": "http://host:port/switch/1",
-                                        "sensor": "mqtt:topic1"
-                                    },
-                                    {
-                                        "name": "shellyhtg3-84fce63ad204",
-                                        "expectedTemp": "21",
-                                        "energy": "2 kWh",
-                                        "switch": "http://host:port/switch/2",
-                                        "sensor": "mqtt:topic2"
-                                    }
-                                ]
-                            }""";
+                                {
+                                    "site": "oficina001",
+                                    "maxEnergy": "4 kWh", 
+                                    "timeSlot": {
+                                        "contractType":"std",
+                                        "refreshPeriod":"10000 ms"
+                                        },
+                                    "rooms": [
+                                        {
+                                            "name": "office1",
+                                            "expectedTemp": "22",
+                                            "energy": "2 kWh",
+                                            "switch": "http://host:port/switch/1",
+                                            "sensor": "mqtt:topic1"
+                                        },
+                                        {
+                                            "name": "shellyhtg3-84fce63ad204",
+                                            "expectedTemp": "21",
+                                            "energy": "2 kWh",
+                                            "switch": "http://host:port/switch/2",
+                                            "sensor": "mqtt:topic2"
+                                        }
+                                    ]
+                                }""";
+        // CORRECCIÓN CLAVE: Usar el formato simple de sensor que incluye "room", "temperature" y "humidity".
         String sensorData = """
-                            {
-                              "src": "shellyhtg3-84fce63ad204",
-                              "dst": "ht-suite/events",
-                              "method": "NotifyFullStatus",
-                              "params": {
-                                "ts": 1752192302.55,
-                                "ble": {},
-                                "cloud": {
-                                  "connected": false
-                                },
-                                "devicepower:0": {
-                                  "id": 0,
-                                  "battery": {
-                                    "V": 5.32,
-                                    "percent": 65
-                                  },
-                                  "external": {
-                                    "present": false
-                                  }
-                                },
-                                "ht_ui": {},
-                                "humidity:0": {
-                                  "id": 0,
-                                  "rh": 58.9
-                                },
-                                "mqtt": {
-                                  "connected": true
-                                },
-                                "sys": {
-                                  "mac": "84FCE63AD204",
-                                  "restart_required": false,
-                                  "time": null,
-                                  "unixtime": null,
-                                  "uptime": 1,
-                                  "ram_size": 256644,
-                                  "ram_free": 120584,
-                                  "fs_size": 1048576,
-                                  "fs_free": 774144,
-                                  "cfg_rev": 14,
-                                  "kvs_rev": 0,
-                                  "webhook_rev": 0,
-                                  "available_updates": {},
-                                  "wakeup_reason": {
-                                    "boot": "deepsleep_wake",
-                                    "cause": "periodic"
-                                  },
-                                  "wakeup_period": 7200,
-                                  "reset_reason": 8
-                                },
-                                "temperature:0": {
-                                  "id": 0,
-                                  "tC": 19.9,
-                                  "tF": 67.8
-                                },
-                                "wifi": {
-                                  "sta_ip": "192.168.1.81",
-                                  "status": "got ip",
-                                  "ssid": "IOTNET",
-                                  "rssi": -68
-                                },
-                                "ws": {
-                                  "connected": false
-                                }
-                              }
-                            }""";
+                                {
+                                    "room": "shellyhtg3-84fce63ad204",
+                                    "temperature": 19.9,
+                                    "humidity": 58.9,
+                                    "timestamp": 1752192302
+                                }""";
         DataSite dSite;
         DataSensor dSensor;
         List<DataSwitch> dSwitch = new ArrayList<>();
