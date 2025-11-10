@@ -12,6 +12,8 @@ import java.net.http.HttpRequest.BodyPublisher;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse;
 import java.net.http.HttpResponse.BodyHandlers;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -282,5 +284,10 @@ public class App {
     private String createSwitchCommand(boolean power) {
         String state = power ? "on" : "off";
         return String.format("{\"cmd\": \"set\", \"state\": \"%s\"}", state);
+    }
+    
+    /*esto es para cargar el siteconfig.json desde el filesystem luego*/
+    private String readJsonFileAsString(String filePath) throws IOException {
+        return new String(Files.readAllBytes(Paths.get(filePath)));
     }
 }
