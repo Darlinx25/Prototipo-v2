@@ -6,7 +6,7 @@ services:
     container_name: ioteste-broker
     ports:
       - "1883:1883"
-    # Monta el archivo de configuración local para permitir conexiones anónimas
+    
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
     restart: always
@@ -14,12 +14,13 @@ services:
   ioteste-app:
     build: .
     container_name: ioteste-app
-    # Asegura que el contenedor de la aplicación se construya y se inicie
-    # después de que el broker haya sido iniciado.
+    
+    
+    environment:
+      - RUN_ENVIRONMENT=DOCKER 
+    
+
     depends_on:
       ioteste-broker:
         condition: service_started
     restart: on-failure
-
-# Docker Compose creará una red interna llamada 'prototipo-v2_default'
-# donde 'ioteste-app' puede usar el nombre 'ioteste-broker' para conectarse.

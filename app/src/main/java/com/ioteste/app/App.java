@@ -3,7 +3,9 @@ package com.ioteste.app;
 import com.ioteste.control.*;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublisher;
@@ -23,7 +25,7 @@ public class App {
     private HttpClient client = HttpClient.newHttpClient();
     private MqttClient mqttClient;
 
-    private Controller controller = new DefaultController();
+    protected Controller controller = new DefaultController();    
     private DataSite siteConfig;
 
     private List<DataSwitch> knownSwitchStatus = new ArrayList<>();
@@ -31,6 +33,11 @@ public class App {
     public static void main(String[] args) {
         App myApp = new App();
         myApp.start();
+    }
+
+    
+    public void setController(Controller controller) {
+        this.controller = controller;
     }
 
     private String getSwitchStatus(String switchURL) throws IOException, InterruptedException {
@@ -85,7 +92,23 @@ public class App {
 
         this.knownSwitchStatus = getInitialSwitchesStatus();
 
-        String brokerUrl = "tcp://ioteste-broker:1883";
+        String brokerUrl;
+        String environmentVariable = System.getenv("RUN_ENVIRONMENT");
+          
+        if ("DOCKER".equalsIgnoreCase(environmentVariable)) {
+            brokerUrl = "tcp://ioteste-broker:1883";
+            System.out.println("Modo EXTERNO detectado. Usando broker: " + brokerUrl);
+        } else {
+            try {
+                InetAddress address = InetAddress.getLocalHost();
+                brokerUrl = "tcp://" + address.getHostAddress() + ":1883";
+                System.out.println("Modo LOCAL (NetBeans) detectado. Usando broker: " + brokerUrl);
+            } catch (UnknownHostException e) {
+                brokerUrl = "tcp://localhost:1883";
+                System.err.println("Advertencia: No se pudo determinar la IP local. Usando fallback: " + brokerUrl);
+            }
+        }
+
         String topic = "habitacion/ambiente";
         String clientId = "app-" + UUID.randomUUID().toString();
 
@@ -111,7 +134,7 @@ public class App {
                     }
 
                     @Override
-                    public void messageArrived(String topic, MqttMessage message) throws Exception {  
+                    public void messageArrived(String topic, MqttMessage message) throws Exception {
                         String payload = new String(message.getPayload());
                         handleSensorMessage(payload);
                     }
@@ -152,11 +175,12 @@ public class App {
         }
     }
 
-    private DataSite loadSiteConfig() throws Exception {
+    
+    public DataSite loadSiteConfig() throws Exception {    
         String siteConfigJson = """
                                 {
                                     "site": "oficina001",
-                                    "maxEnergy": "3 kWh",  
+                                    "maxEnergy": "4 kWh",  
                                     "timeSlot": {
                                         "contractType":"std",
                                         "refreshPeriod":"10000 ms"
@@ -181,21 +205,21 @@ public class App {
         return new DataSite(siteConfigJson);
     }
 
-    private void handleSensorMessage(String payload) {
+
+    public void handleSensorMessage(String payload) {    
         try {
             DataSensor sensorData = new DataSensor(payload);
 
             Context context = new Context(LocalDateTime.now());
             AppData appData = new AppData(siteConfig, sensorData, this.knownSwitchStatus, context);
-            
-             
-            
+
+
             System.out.println("--- INICIO DE PROCESAMIENTO ---");
-            
-            System.out.printf("⏰ Hora actual: %s\n", context.getCurrentTime()); 
+
+            System.out.printf("Hora actual: %s\n", context.getCurrentTime());
             System.out.println("-------------------------------");
-            
-            
+
+
             ControlResponse response = controller.powerManagement(appData);
 
             executeOperations(response.getOperations());
@@ -215,7 +239,8 @@ public class App {
         }
     }
 
-    private List<DataSwitch> getInitialSwitchesStatus() {
+    
+    public List<DataSwitch> getInitialSwitchesStatus() {
         List<DataSwitch> switches = new ArrayList<>();
         if (siteConfig == null) {
             return switches;
