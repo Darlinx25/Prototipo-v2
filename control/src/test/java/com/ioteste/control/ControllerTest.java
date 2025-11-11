@@ -26,7 +26,7 @@ public class ControllerTest {
     @BeforeAll
     public static void setup() {
         long now = System.currentTimeMillis();
-        final long ZONE_DURATION = 1000 * 60; // CORRECCIÓN: Sincronizado a 1 minuto (60 segundos)
+        final long ZONE_DURATION = 1000 * 60; 
 
         long currentZoneBaseTS = now / ZONE_DURATION * ZONE_DURATION;
         
@@ -56,14 +56,11 @@ public class ControllerTest {
     @Test
     public void testSwitchTurnsOn() {
         appData.setContext(new Context(notPeakHours12));
-        
-        // El sensor reporta temperatura de "shellyhtg3-84fce63ad204"
         appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/1", false));
         appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/2", false));
         
         ControlResponse result = instance.powerManagement(appData);
 
-        // Se espera que encienda switch/2 (sensor asociado)
         assertEquals(1, result.getOperations().size());
         assertEquals("http://host:port/switch/2", result.getOperations().get(0).getSwitchURL());
         assertTrue(result.getOperations().get(0).getPower());
@@ -73,13 +70,12 @@ public class ControllerTest {
     @Test
     public void testSwitchTurnsOff() {
         appData.setContext(new Context(notPeakHours23));
-        appData.getSensorData().setTemperature(22.0f); // Temperatura actual >= Esperada (21)
+        appData.getSensorData().setTemperature(22.0f);
         appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/1", false));
         appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/2", true));
         
         ControlResponse result = instance.powerManagement(appData);
 
-        // Se espera que apague switch/2 (sensor asociado)
         assertEquals(1, result.getOperations().size());
         assertEquals("http://host:port/switch/2", result.getOperations().get(0).getSwitchURL());
         assertFalse(result.getOperations().get(0).getPower());
@@ -112,13 +108,9 @@ public class ControllerTest {
     public void testAtMaxEnergyLimit() {
         appData.setContext(new Context(notPeakHours12));
         
-        // office1 (2 kWh) está encendido.
         appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/1", true));
-        // shellyhtg3-84fce63ad204 (2 kWh) está apagado y necesita encenderse (Temp. baja por defecto).
         appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/2", false)); 
-        
-        // Carga actual: 2 kWh. Carga total si se enciende switch/2: 2 + 2 = 4 kWh (Igual al límite).
-        
+
         ControlResponse result = instance.powerManagement(appData);
         
         assertEquals(1, result.getOperations().size(), "Debe haber una operación de encendido.");
@@ -144,7 +136,6 @@ public class ControllerTest {
         appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/2", true));
         ControlResponse result1 = instance.powerManagement(appData);
 
-        // Se espera que apague los dos
         assertEquals(2, result1.getOperations().size());
         assertFalse(result1.getOperations().get(0).getPower());
         assertFalse(result1.getOperations().get(1).getPower());
@@ -168,8 +159,6 @@ public class ControllerTest {
         appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/1", false)); 
         appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/2", false));
         
-        // La temperatura es baja (19.9°C por defecto < 21°C esperada)
-        
         ControlResponse result = instance.powerManagement(appData);
 
         // Debería intentar encender el switch/2 (el que reporta la temperatura).
@@ -177,8 +166,6 @@ public class ControllerTest {
         assertEquals("http://host:port/switch/2", result.getOperations().get(0).getSwitchURL());
         assertTrue(result.getOperations().get(0).getPower(), "El switch debe encenderse para alcanzar la temperatura.");
     }
-
-
     private AppData getAppDataTemplate() {
         String siteConfig = """
                                 {
@@ -205,14 +192,27 @@ public class ControllerTest {
                                         }
                                     ]
                                 }""";
-        // CORRECCIÓN CLAVE: Usar el formato simple de sensor que incluye "room", "temperature" y "humidity".
         String sensorData = """
-                                {
-                                    "room": "shellyhtg3-84fce63ad204",
-                                    "temperature": 19.9,
-                                    "humidity": 58.9,
-                                    "timestamp": 1752192302
-                                }""";
+            {
+                "src":"shellyhtg3-84fce63ad204",
+                "dst":"ht-suite/events",
+                "method":"NotifyFullStatus",
+                "ts":1735694700.0,
+                "params":{
+                    "ts":1735694700.0,
+                    "humidity:0":{
+                        "id":0,
+                        "rh":58.9
+                    },
+                    "temperature:0":{
+                        "id":0,
+                        "tC":19.9,
+                        "tF":67.82
+                    }
+                }
+            }
+            """;
+        
         DataSite dSite;
         DataSensor dSensor;
         List<DataSwitch> dSwitch = new ArrayList<>();
