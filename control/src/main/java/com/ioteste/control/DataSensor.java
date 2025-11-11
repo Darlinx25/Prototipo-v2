@@ -7,7 +7,12 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class DataSensor {
+
+    private static final Logger logger = LoggerFactory.getLogger(DataSensor.class);
 
     private String room;
     private float temperature;
@@ -40,35 +45,12 @@ public class DataSensor {
         }
     }
 
-    public String getRoom() {
-        return room;
-    }
-
-    public float getTemperature() {
-        return temperature;
-    }
-
-    public float getHumidity() {
-        return humidity;
-    }
-
-    public LocalDateTime getDateTime() {
-        return dateTime;
-    }
-
-    public void setRoom(String room) {
-        this.room = room;
-    }
-
-    public void setTemperature(float temperature) {
-        this.temperature = temperature;
-    }
-
-    public void setHumidity(float humidity) {
-        this.humidity = humidity;
-    }
-
-    public void setDateTime(LocalDateTime dateTime) {
-        this.dateTime = dateTime;
-    }
+    public String getRoom() { return room; }
+    public float getTemperature() { return temperature; }
+    public float getHumidity() { return humidity; }
+    public LocalDateTime getDateTime() { return dateTime; }
+    public void setRoom(String room) { this.room = room; }
+    public void setTemperature(float temperature) { this.temperature = temperature; }
+    public void setHumidity(float humidity) { this.humidity = humidity; }
+    public void setDateTime(LocalDateTime dateTime) { this.dateTime = dateTime; }
 }

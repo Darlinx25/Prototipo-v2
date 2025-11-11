@@ -3,9 +3,7 @@ package com.ioteste.app;
 import com.ioteste.control.*;
 
 import java.io.IOException;
-import java.net.InetAddress;
 import java.net.URI;
-import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublisher;
@@ -24,7 +22,12 @@ import java.util.UUID;
 import org.eclipse.paho.client.mqttv3.*;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class App {
+
+    private static final Logger logger = LoggerFactory.getLogger(App.class);
 
     private HttpClient client = HttpClient.newHttpClient();
     private MqttClient mqttClient;
@@ -72,15 +75,14 @@ public class App {
         try {
             this.siteConfig = loadSiteConfig();
         } catch (Exception e) {
-            System.err.println("FATAL: No se pudo cargar la configuración del sitio.");
-            e.printStackTrace();
+            logger.error("FATAL: No se pudo cargar la configuración del sitio.", e);
             return;
         }
 
         this.knownSwitchStatus = getInitialSwitchesStatus();
 
         String brokerUrl = "tcp://localhost:1883";
-        System.out.println("Modo de Integración. Usando broker de cajaNegra en: " + brokerUrl);
+        logger.info("Modo de Integración. Usando broker de cajaNegra en: {}", brokerUrl);
 
 
         String clientId = "app-" + UUID.randomUUID().toString();
@@ -97,19 +99,19 @@ public class App {
                 options.setCleanSession(true);
                 options.setConnectionTimeout(10);
 
-                System.out.println("Intentando conectar a broker: " + brokerUrl + " (Intento: " + (retryCount + 1) + ")");
+                logger.info("Intentando conectar a broker: {} (Intento: {})", brokerUrl, (retryCount + 1));
 
                 mqttClient.setCallback(new MqttCallback() {
 
                     @Override
                     public void connectionLost(Throwable cause) {
-                        System.err.println("Conexión perdida: " + cause.getMessage());
+                        logger.error("Conexión MQTT perdida", cause);
                     }
 
                     @Override
                     public void messageArrived(String topic, MqttMessage message) throws Exception {
                         String payload = new String(message.getPayload());
-                        System.out.printf("Mensaje recibido en tópico [%s]\n", topic);
+                        logger.info("Mensaje recibido en tópico [{}]", topic);
                         // --- CAMBIO CLAVE: Pasa el TÓPICO al handler ---
                         handleSensorMessage(topic, payload);
                     }
@@ -120,11 +122,11 @@ public class App {
                 });
 
                 mqttClient.connect(options);
-                System.out.println("¡Conexión MQTT exitosa!");
-                System.out.println("Suscribiendo a tópicos de sensores desde siteConfig...");
+                logger.info("¡Conexión MQTT exitosa!");
+                logger.info("Suscribiendo a tópicos de sensores desde siteConfig...");
 
                 if (siteConfig == null || siteConfig.getRooms() == null) {
-                    System.err.println("FATAL: No hay configuración de habitaciones para suscribir.");
+                    logger.error("FATAL: No hay configuración de habitaciones para suscribir.");
                     return; 
                 }
 
@@ -133,7 +135,7 @@ public class App {
                     String sensorTopic = room.getSensor(); 
 
                     if (sensorTopic == null || sensorTopic.isBlank()) {
-                        System.err.println("Advertencia: Habitación '" + room.getName() + "' no tiene tópico de sensor definido.");
+                        logger.warn("Advertencia: Habitación '{}' no tiene tópico de sensor definido.", room.getName());
                         continue;
                     }
 
@@ -146,7 +148,7 @@ public class App {
                 for (String baseTopic : uniqueBaseTopics) {
                     String wildcardTopic = baseTopic + "/+"; 
                     
-                    System.out.println("Suscribiendo a: " + wildcardTopic);
+                    logger.info("Suscribiendo a: {}", wildcardTopic);
                     
                     mqttClient.subscribe(wildcardTopic, (topic, message) -> {
                         String payload = new String(message.getPayload());
@@ -154,14 +156,14 @@ public class App {
                     });
                 }
                 
-                System.out.println("IoTEste App iniciado. Escuchando tópicos de sensores.");
+                logger.info("IoTEste App iniciado. Escuchando tópicos de sensores.");
 
                 while (true) {
                     Thread.sleep(1000);
                 }
             } catch (MqttException e) {
                 retryCount++;
-                System.err.println("Error de conexión MQTT. Reintentando en " + waitTime + "ms. Causa: " + e.getMessage());
+                logger.error("Error de conexión MQTT. Reintentando en {}ms. Causa: {}", waitTime, e.getMessage());
                 try {
                     Thread.sleep(waitTime);
                 } catch (InterruptedException ie) {
@@ -169,20 +171,20 @@ public class App {
                     break;
                 }
             } catch (InterruptedException e) {
-                System.err.println("Aplicación interrumpida.");
+                logger.warn("Aplicación interrumpida.");
                 Thread.currentThread().interrupt();
                 break;
             }
         }
 
         if (retryCount >= maxRetries) {
-            System.err.println("FATAL: Se agotaron los reintentos de conexión MQTT. Saliendo de la aplicación.");
+            logger.error("FATAL: Se agotaron los reintentos de conexión MQTT. Saliendo de la aplicación.");
         }
     }
     
     public DataSite loadSiteConfig() throws Exception {
         String configURL = "http://localhost:8080/site-config";
-        System.out.println("Cargando configuración del sitio desde: " + configURL);
+        logger.info("Cargando configuración del sitio desde: {}", configURL);
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(configURL))
@@ -212,7 +214,7 @@ public class App {
             }
 
             if (roomName == null) {
-                System.err.println("Error: Mensaje de tópico '" + topic + "' no se pudo mapear a una habitación.");
+                logger.warn("Error: Mensaje de tópico '{}' no se pudo mapear a una habitación. Topic ID: {}", topic, topicId);
                 return; 
             }
             
@@ -221,9 +223,9 @@ public class App {
             Context context = new Context(LocalDateTime.now());
             AppData appData = new AppData(siteConfig, sensorData, this.knownSwitchStatus, context);
 
-            System.out.println("--- INICIO DE PROCESAMIENTO ---");
-            System.out.printf("Hora actual: %s\n", context.getCurrentTime());
-            System.out.println("-------------------------------");
+            logger.info("--- INICIO DE PROCESAMIENTO ---");
+            logger.info("Hora actual: {}", context.getCurrentTime());
+            logger.info("-------------------------------");
 
             ControlResponse response = controller.powerManagement(appData);
 
@@ -239,8 +241,7 @@ public class App {
             }
 
         } catch (Exception e) {
-            System.err.println("Error procesando mensaje o ejecutando control.");
-            e.printStackTrace();
+            logger.error("Error procesando mensaje o ejecutando control.", e);
         }
     }
 
@@ -260,7 +261,7 @@ public class App {
                 switches.add(status);
 
             } catch (Exception e) {
-                System.err.printf("Falla REST al obtener estado inicial de switch %s. Se asume apagado.\n", switchURL);
+                logger.warn("Falla REST al obtener estado inicial de switch {}. Se asume apagado.", switchURL, e);
                 switches.add(new DataSwitch(switchURL, false));
             }
         }
@@ -277,9 +278,9 @@ public class App {
             String jsonCommand = createSwitchCommand(op.getPower());
             try {
                 String response = postSwitchOp(op.getSwitchURL(), jsonCommand);
-                System.out.printf("Comando OK: %s -> %s\n", op.getSwitchURL(), jsonCommand);
+                logger.info("Comando OK: {} -> {}", op.getSwitchURL(), jsonCommand);
             } catch (Exception e) {
-                System.err.printf("Falla REST al enviar comando a switch %s.\n", op.getSwitchURL());
+                logger.error("Falla REST al enviar comando a switch {}.", op.getSwitchURL(), e);
             }
         }
     }

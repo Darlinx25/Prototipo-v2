@@ -34,6 +34,12 @@
             <version>2.19.2</version>
             <type>jar</type>
         </dependency>
+        <dependency>
+            <groupId>com.adaptiverecognition</groupId>
+            <artifactId>ldap4j-slf4j-shim</artifactId>
+            <version>1.0.0</version>
+            <type>jar</type>
+        </dependency>
     </dependencies>
     
     <properties>

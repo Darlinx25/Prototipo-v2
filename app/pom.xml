@@ -11,11 +11,23 @@
 
     <dependencies>
         <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>2.0.12</version>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>1.4.14</version>
+        </dependency>
+        
+        <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
             <version>2.19.2</version>
             <type>jar</type>
         </dependency>
+        
         <dependency>
             <groupId>org.eclipse.paho</groupId>
             <artifactId>org.eclipse.paho.client.mqttv3</artifactId>
@@ -26,6 +38,7 @@
             <artifactId>org.eclipse.paho.mqtt.utility</artifactId>
             <version>1.1.0</version>
         </dependency>
+        
         <dependency>
             <groupId>com.ioteste</groupId>
             <artifactId>control</artifactId>
@@ -49,6 +62,12 @@
             <artifactId>mockito-junit-jupiter</artifactId>
             <version>5.12.0</version>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.adaptiverecognition</groupId>
+            <artifactId>ldap4j-slf4j-shim</artifactId>
+            <version>1.0.0</version>
+            <type>jar</type>
         </dependency>
     </dependencies>
 
