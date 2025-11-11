@@ -88,26 +88,24 @@ public class ControllerTest {
     @Test
     public void testAboveMaxEnergy() {
         appData.setContext(new Context(notPeakHours23));
-        
+
         List<Room> rooms = new ArrayList<>();
-        rooms.add(new Room("office1", 22.0f, 8.0f, "http://host:port/switch/1"));
-        appData.getSensorData().setTemperature(19.0f);
-        rooms.add(new Room("shellyhtg3-84fce63ad204", 21.0f, 8.0f, "http://host:port/switch/2")); 
+        rooms.add(new Room("office1", 22.0f, 8.0f, "http://host:port/switch/1", "topic-office1"));
+        rooms.add(new Room("shellyhtg3-84fce63ad204", 21.0f, 8.0f, "http://host:port/switch/2", "topic-shelly"));
         appData.getSiteConfig().setRooms(rooms);
-        
+        appData.getSensorData().setTemperature(19.0f);
+        appData.getSensorData().setRoom("shellyhtg3-84fce63ad204"); 
+
+        appData.getSwitchStatus().clear(); 
         appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/1", true));
         appData.getSwitchStatus().add(new DataSwitch("http://host:port/switch/2", false));
-        
-        // Carga Máxima = 14 kWh. Carga Actual = 8 kWh. Carga Deseada = 8 kWh.
-        // Carga Total si se enciende switch/2 = 8 + 8 = 16 kWh. (Mayor a 14 kWh)
-        appData.getSiteConfig().setMaxEnergy(14.0f); 
-        
-        ControlResponse result = instance.powerManagement(appData);
 
-        // Se espera que bloquee el encendido y mantenga el switch/2 APAGADO.
+        appData.getSiteConfig().setMaxEnergy(14.0f);
+
+        ControlResponse result = instance.powerManagement(appData);
         assertEquals(1, result.getOperations().size());
         assertEquals("http://host:port/switch/2", result.getOperations().get(0).getSwitchURL());
-        assertFalse(result.getOperations().get(0).getPower()); 
+        assertFalse(result.getOperations().get(0).getPower());
     }
     
     @Test

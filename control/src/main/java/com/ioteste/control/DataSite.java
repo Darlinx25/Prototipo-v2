@@ -56,7 +56,9 @@ public class DataSite {
                 String switchURL = nodoRoom.get("switch").asText();
                 
                
-                roomList.add(new Room(name, expectedTemp, energy, switchURL)); 
+                String sensor = nodoRoom.get("sensor").asText();
+
+                roomList.add(new Room(name, expectedTemp, energy, switchURL, sensor));
             }
         }
         this.rooms = roomList;

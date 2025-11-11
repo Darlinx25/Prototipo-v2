@@ -16,7 +16,9 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet; // Importar HashSet
 import java.util.List;
+import java.util.Set; // Importar Set
 import java.util.UUID;
 
 import org.eclipse.paho.client.mqttv3.*;
@@ -42,36 +44,19 @@ public class App {
         this.controller = controller;
     }
 
+
+    
     private String getSwitchStatus(String switchURL) throws IOException, InterruptedException {
-        if (switchURL.contains("http://host:port/")) {
-            if (switchURL.endsWith("/switch/2") && Math.random() < 0.2) {
-                throw new IOException("Simulated network failure to Switch 2");
-            }
-
-            String state;
-            if (switchURL.endsWith("/switch/1")) {
-                state = "off";
-            } else if (switchURL.endsWith("/switch/2")) {
-                state = "off";
-            } else {
-                state = "off";
-            }
-            return String.format("{\"state\": \"%s\", \"power\": 2}", state);
-        }
-
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(switchURL)).build();
         HttpResponse<String> response = this.client.send(request, BodyHandlers.ofString());
 
         return response.body();
     }
+    
+    
 
     private String postSwitchOp(String switchURL, String jsonBody) throws IOException, InterruptedException {
-        if (switchURL.contains("http://host:port/")) {
-            System.out.println("SIMULACIÓN: Comando enviado a: " + switchURL + " Body: " + jsonBody);
-            return "{\"state\":\"ok\"}";
-        }
-
         BodyPublisher bodyPublisher = BodyPublishers.ofString(jsonBody);
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(switchURL))
@@ -94,24 +79,11 @@ public class App {
 
         this.knownSwitchStatus = getInitialSwitchesStatus();
 
-        String brokerUrl;
-        String environmentVariable = System.getenv("RUN_ENVIRONMENT");
-          
-        if ("DOCKER".equalsIgnoreCase(environmentVariable)) {
-            brokerUrl = "tcp://ioteste-broker:1883";
-            System.out.println("Modo EXTERNO detectado. Usando broker: " + brokerUrl);
-        } else {
-            try {
-                InetAddress address = InetAddress.getLocalHost();
-                brokerUrl = "tcp://" + address.getHostAddress() + ":1883";
-                System.out.println("Modo LOCAL (NetBeans) detectado. Usando broker: " + brokerUrl);
-            } catch (UnknownHostException e) {
-                brokerUrl = "tcp://localhost:1883";
-                System.err.println("Advertencia: No se pudo determinar la IP local. Usando fallback: " + brokerUrl);
-            }
-        }
+        String brokerUrl = "tcp://localhost:1883";
+        System.out.println("Modo de Integración. Usando broker de cajaNegra en: " + brokerUrl);
 
-        String topic = "habitacion/ambiente";
+
+
         String clientId = "app-" + UUID.randomUUID().toString();
 
         int maxRetries = 10;
@@ -138,6 +110,7 @@ public class App {
                     @Override
                     public void messageArrived(String topic, MqttMessage message) throws Exception {
                         String payload = new String(message.getPayload());
+                        System.out.printf("Mensaje recibido en tópico [%s]\n", topic);
                         handleSensorMessage(payload);
                     }
 
@@ -149,9 +122,40 @@ public class App {
                 mqttClient.connect(options);
                 System.out.println("¡Conexión MQTT exitosa!");
 
-                mqttClient.subscribe(topic);
+                System.out.println("Suscribiendo a tópicos de sensores desde siteConfig...");
 
-                System.out.println("IoTEste App iniciado. Escuchando en tópico: " + topic);
+                if (siteConfig == null || siteConfig.getRooms() == null) {
+                    System.err.println("FATAL: No hay configuración de habitaciones para suscribir.");
+                    return; 
+                }
+
+                Set<String> uniqueBaseTopics = new HashSet<>();
+                for (Room room : siteConfig.getRooms()) {
+                    String sensorTopic = room.getSensor(); 
+
+                    if (sensorTopic == null || sensorTopic.isBlank()) {
+                        System.err.println("Advertencia: Habitación '" + room.getName() + "' no tiene tópico de sensor definido.");
+                        continue;
+                    }
+
+                    if (sensorTopic.startsWith("mqtt:")) {
+                        sensorTopic = sensorTopic.substring(5);
+                    }
+                    uniqueBaseTopics.add(sensorTopic);
+                }
+
+                for (String baseTopic : uniqueBaseTopics) {
+                    String wildcardTopic = baseTopic + "/+";
+                    
+                    System.out.println("Suscribiendo a: " + wildcardTopic);
+                    
+                    mqttClient.subscribe(wildcardTopic, (topic, message) -> {
+                        String payload = new String(message.getPayload());
+                        handleSensorMessage(payload); 
+                    });
+                }
+                
+                System.out.println("IoTEste App iniciado. Escuchando tópicos de sensores.");
 
                 while (true) {
                     Thread.sleep(1000);
@@ -176,35 +180,17 @@ public class App {
             System.err.println("FATAL: Se agotaron los reintentos de conexión MQTT. Saliendo de la aplicación.");
         }
     }
-
     
-    public DataSite loadSiteConfig() throws Exception {    
-        String siteConfigJson = """
-                                {
-                                    "site": "oficina001",
-                                    "maxEnergy": "4 kWh",  
-                                    "timeSlot": {
-                                        "contractType":"std",
-                                        "refreshPeriod":"10000 ms"
-                                        },
-                                    "rooms": [
-                                        {
-                                            "name": "office1",
-                                            "expectedTemp": "22",
-                                            "energy": "2 kWh",
-                                            "switch": "http://host:port/switch/1",
-                                            "sensor": "mqtt:topic1"
-                                        },
-                                        {
-                                            "name": "shellyhtg3-84fce63ad204",
-                                            "expectedTemp": "21",
-                                            "energy": "2 kWh",
-                                            "switch": "http://host:port/switch/2",
-                                            "sensor": "mqtt:topic2"
-                                        }
-                                    ]
-                                }""";
-        return new DataSite(siteConfigJson);
+    public DataSite loadSiteConfig() throws Exception {
+        String configURL = "http://localhost:8080/site-config";
+        System.out.println("Cargando configuración del sitio desde: " + configURL);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(configURL))
+                .GET()
+                .build();
+        HttpResponse<String> response = this.client.send(request, BodyHandlers.ofString());
+        return new DataSite(response.body());
     }
 
 
@@ -265,7 +251,7 @@ public class App {
     }
 
     private DataSwitch parseSwitchStatus(String switchURL, String jsonResponse) {
-        boolean isActive = jsonResponse.contains("\"state\": \"on\"");
+        boolean isActive = jsonResponse.contains("\"output\": true");
         return new DataSwitch(switchURL, isActive);
     }
 
@@ -274,7 +260,7 @@ public class App {
             String jsonCommand = createSwitchCommand(op.getPower());
             try {
                 String response = postSwitchOp(op.getSwitchURL(), jsonCommand);
-                System.out.printf("Comando OK: %s -> Power: %s\n", op.getSwitchURL(), op.getPower());
+                System.out.printf("Comando OK: %s -> %s\n", op.getSwitchURL(), jsonCommand);
             } catch (Exception e) {
                 System.err.printf("Falla REST al enviar comando a switch %s.\n", op.getSwitchURL());
             }
@@ -282,11 +268,9 @@ public class App {
     }
 
     private String createSwitchCommand(boolean power) {
-        String state = power ? "on" : "off";
-        return String.format("{\"cmd\": \"set\", \"state\": \"%s\"}", state);
+        return String.format("{\"state\": %b}", power);
     }
     
-    /*esto es para cargar el siteconfig.json desde el filesystem luego*/
     private String readJsonFileAsString(String filePath) throws IOException {
         return new String(Files.readAllBytes(Paths.get(filePath)));
     }

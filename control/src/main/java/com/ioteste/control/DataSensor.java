@@ -18,14 +18,19 @@ public class DataSensor {
         ObjectMapper mapper = new ObjectMapper();
         JsonNode root = mapper.readTree(sensorJson);
 
-        this.room = root.get("room").asText(); 
-        this.temperature = root.get("temperature").floatValue();
-        this.humidity = root.get("humidity").floatValue();
+        this.room = root.path("src").asText("unknown-room"); 
 
-        JsonNode timestampNode = root.get("timestamp");
+        JsonNode params = root.path("params");
+        this.temperature = (float) params.path("temperature:0").path("tC").asDouble(0.0);
 
-        if (timestampNode != null && timestampNode.isIntegralNumber()) {
-            long epochSeconds = timestampNode.asLong();
+        this.humidity = (float) params.path("humidity:0").path("rh").asDouble(0.0);
+
+        long epochSeconds = root.path("ts").asLong(0L);
+        if (epochSeconds == 0L) {
+             epochSeconds = params.path("ts").asLong(Instant.now().getEpochSecond());
+        }
+        
+        if (epochSeconds != 0L) {
             this.dateTime = LocalDateTime.ofInstant(
                 Instant.ofEpochSecond(epochSeconds), 
                 ZoneOffset.UTC

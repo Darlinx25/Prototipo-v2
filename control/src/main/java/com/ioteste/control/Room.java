@@ -5,18 +5,24 @@ public class Room {
     private float expectedTemp;
     private float energy;
     private String switchURL;
+    private String sensor;
 
     public Room() {}
     
-    public Room(String name, float expectedTemp, float energy, String switchURL) {
+    public Room(String name, float expectedTemp, float energy, String switchURL,String sensor) {
         this.name = name;
         this.expectedTemp = expectedTemp;
         this.energy = energy;
         this.switchURL = switchURL;
+        this.sensor = sensor;
     }
 
     public String getName() {
         return name;
+    }
+    
+    public String getSensor() {
+        return sensor;
     }
 
     public float getExpectedTemp() {
