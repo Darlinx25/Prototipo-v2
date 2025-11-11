@@ -16,9 +16,9 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashSet; // Importar HashSet
+import java.util.HashSet;
 import java.util.List;
-import java.util.Set; // Importar Set
+import java.util.Set;
 import java.util.UUID;
 
 import org.eclipse.paho.client.mqttv3.*;
@@ -83,7 +83,6 @@ public class App {
         System.out.println("Modo de Integración. Usando broker de cajaNegra en: " + brokerUrl);
 
 
-
         String clientId = "app-" + UUID.randomUUID().toString();
 
         int maxRetries = 10;
@@ -111,7 +110,8 @@ public class App {
                     public void messageArrived(String topic, MqttMessage message) throws Exception {
                         String payload = new String(message.getPayload());
                         System.out.printf("Mensaje recibido en tópico [%s]\n", topic);
-                        handleSensorMessage(payload);
+                        // --- CAMBIO CLAVE: Pasa el TÓPICO al handler ---
+                        handleSensorMessage(topic, payload);
                     }
 
                     @Override
@@ -121,7 +121,6 @@ public class App {
 
                 mqttClient.connect(options);
                 System.out.println("¡Conexión MQTT exitosa!");
-
                 System.out.println("Suscribiendo a tópicos de sensores desde siteConfig...");
 
                 if (siteConfig == null || siteConfig.getRooms() == null) {
@@ -141,17 +140,17 @@ public class App {
                     if (sensorTopic.startsWith("mqtt:")) {
                         sensorTopic = sensorTopic.substring(5);
                     }
-                    uniqueBaseTopics.add(sensorTopic);
+                    uniqueBaseTopics.add(sensorTopic); 
                 }
-
+                
                 for (String baseTopic : uniqueBaseTopics) {
-                    String wildcardTopic = baseTopic + "/+";
+                    String wildcardTopic = baseTopic + "/+"; 
                     
                     System.out.println("Suscribiendo a: " + wildcardTopic);
                     
                     mqttClient.subscribe(wildcardTopic, (topic, message) -> {
                         String payload = new String(message.getPayload());
-                        handleSensorMessage(payload); 
+                        handleSensorMessage(topic, payload); 
                     });
                 }
                 
@@ -194,19 +193,37 @@ public class App {
     }
 
 
-    public void handleSensorMessage(String payload) {    
+    public void handleSensorMessage(String topic, String payload) {    
         try {
             DataSensor sensorData = new DataSensor(payload);
+
+
+            String roomName = null;
+            String topicId = topic.substring(topic.lastIndexOf('/') + 1);
+
+            for (Room room : siteConfig.getRooms()) {
+                String switchURL = room.getSwitchURL();
+                String switchId = switchURL.substring(switchURL.lastIndexOf('/') + 1);
+                
+                if (topicId.equals(switchId)) {
+                     roomName = room.getName();
+                     break;
+                }
+            }
+
+            if (roomName == null) {
+                System.err.println("Error: Mensaje de tópico '" + topic + "' no se pudo mapear a una habitación.");
+                return; 
+            }
+            
+            sensorData.setRoom(roomName); 
 
             Context context = new Context(LocalDateTime.now());
             AppData appData = new AppData(siteConfig, sensorData, this.knownSwitchStatus, context);
 
-
             System.out.println("--- INICIO DE PROCESAMIENTO ---");
-
             System.out.printf("Hora actual: %s\n", context.getCurrentTime());
             System.out.println("-------------------------------");
-
 
             ControlResponse response = controller.powerManagement(appData);
 
