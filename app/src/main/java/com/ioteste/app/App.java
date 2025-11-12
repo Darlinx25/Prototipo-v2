@@ -263,6 +263,10 @@ public class App {
     }
 
     private void executeOperations(List<Operation> operations) {
+        if (operations.isEmpty()) {
+            logger.info("No operations");
+            return;
+        }
         for (Operation op : operations) {
             String jsonCommand = createSwitchCommand(op.getPower());
             try {
