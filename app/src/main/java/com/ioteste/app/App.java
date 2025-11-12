@@ -122,114 +122,72 @@ public class App {
         logger.info("Modo de Integración. Usando broker de cajaNegra en: {}", brokerUrl);
 
         String clientId = "app-" + UUID.randomUUID().toString();
-        int maxRetries = 10;
-        int retryCount = 0;
-        long waitTime = 3000;
 
-        while (retryCount < maxRetries) {
-            try {
-                mqttClient = new MqttClient(brokerUrl, clientId, new MemoryPersistence());
-                MqttConnectOptions options = new MqttConnectOptions();
-                options.setAutomaticReconnect(true);
-                options.setCleanSession(true);
-                options.setConnectionTimeout(10);
+        try {
+            mqttClient = new MqttClient(brokerUrl, clientId, new MemoryPersistence());
+            MqttConnectOptions options = new MqttConnectOptions();
+            options.setAutomaticReconnect(true);
+            options.setCleanSession(true);
+            options.setConnectionTimeout(10);
 
-                logger.info("Intentando conectar a broker: {} (Intento: {})", brokerUrl, (retryCount + 1));
-
-                mqttClient.setCallback(new MqttCallbackExtended() {
-                    @Override
-                    public void connectComplete(boolean reconnect, String serverURI) {
-                        logger.info("Conexión MQTT {} con broker {}", (reconnect ? "reestablecida" : "exitosa"), serverURI);
-                        try {
-                            if (siteConfig != null && siteConfig.getRooms() != null) {
-                                Set<String> uniqueBaseTopics = new HashSet<>();
-                                for (Room room : siteConfig.getRooms()) {
-                                    String sensorTopic = room.getSensor();
-                                    if (sensorTopic == null || sensorTopic.isBlank()) continue;
-                                    if (sensorTopic.startsWith("mqtt:")) sensorTopic = sensorTopic.substring(5);
-                                    uniqueBaseTopics.add(sensorTopic);
-                                }
-                                for (String baseTopic : uniqueBaseTopics) {
-                                    String wildcardTopic = baseTopic + "/+";
-                                    logger.info("Suscribiendo a: {}", wildcardTopic);
-                                    mqttClient.subscribe(wildcardTopic, (topic, message) -> {
-                                        String payload = new String(message.getPayload());
-                                        handleSensorMessage(topic, payload);
-                                    });
-                                }
-                            } else {
-                                logger.warn("No hay configuración de siteConfig al reconectar MQTT.");
+            mqttClient.setCallback(new MqttCallbackExtended() {
+                @Override
+                public void connectComplete(boolean reconnect, String serverURI) {
+                    logger.info("Conexión MQTT {} con broker {}", (reconnect ? "reestablecida" : "exitosa"), serverURI);
+                    try {
+                        if (siteConfig != null && siteConfig.getRooms() != null) {
+                            Set<String> uniqueBaseTopics = new HashSet<>();
+                            for (Room room : siteConfig.getRooms()) {
+                                String sensorTopic = room.getSensor();
+                                if (sensorTopic == null || sensorTopic.isBlank()) continue;
+                                if (sensorTopic.startsWith("mqtt:")) sensorTopic = sensorTopic.substring(5);
+                                uniqueBaseTopics.add(sensorTopic);
                             }
-                        } catch (MqttException e) {
-                            logger.error("Error al re-suscribirse tras reconexión MQTT", e);
+                            for (String baseTopic : uniqueBaseTopics) {
+                                String wildcardTopic = baseTopic + "/+";
+                                logger.info("Suscribiendo a: {}", wildcardTopic);
+                                mqttClient.subscribe(wildcardTopic, (topic, message) -> {
+                                    String payload = new String(message.getPayload());
+                                    handleSensorMessage(topic, payload);
+                                });
+                            }
+                        } else {
+                            logger.warn("No hay configuración de siteConfig al reconectar MQTT.");
                         }
+                    } catch (MqttException e) {
+                        logger.error("Error al re-suscribirse tras reconexión MQTT", e);
                     }
-
-                    @Override
-                    public void connectionLost(Throwable cause) {
-                        logger.error("Conexión MQTT perdida", cause);
-                    }
-
-                    @Override
-                    public void messageArrived(String topic, MqttMessage message) throws Exception {
-                        String payload = new String(message.getPayload());
-                        handleSensorMessage(topic, payload);
-                    }
-
-                    @Override
-                    public void deliveryComplete(IMqttDeliveryToken token) {
-                    }
-                });
-
-                mqttClient.connect(options);
-                logger.info("¡Conexión MQTT exitosa!");
-                logger.info("Suscribiendo a tópicos de sensores desde siteConfig...");
-
-                if (siteConfig == null || siteConfig.getRooms() == null) {
-                    logger.error("FATAL: No hay configuración de habitaciones para suscribir.");
-                    return;
                 }
 
-                Set<String> uniqueBaseTopics = new HashSet<>();
-                for (Room room : siteConfig.getRooms()) {
-                    String sensorTopic = room.getSensor();
-                    if (sensorTopic == null || sensorTopic.isBlank()) continue;
-                    if (sensorTopic.startsWith("mqtt:")) sensorTopic = sensorTopic.substring(5);
-                    uniqueBaseTopics.add(sensorTopic);
+                @Override
+                public void connectionLost(Throwable cause) {
+                    logger.error("Conexión MQTT perdida, intentando reconectar...");
+                    
                 }
 
-                for (String baseTopic : uniqueBaseTopics) {
-                    String wildcardTopic = baseTopic + "/+";
-                    logger.info("Suscribiendo a: {}", wildcardTopic);
-                    mqttClient.subscribe(wildcardTopic, (topic, message) -> {
-                        String payload = new String(message.getPayload());
-                        handleSensorMessage(topic, payload);
-                    });
+                @Override
+                public void messageArrived(String topic, MqttMessage message) throws Exception {
+                    String payload = new String(message.getPayload());
+                    handleSensorMessage(topic, payload);
                 }
 
-                logger.info("IoTEste App iniciado. Escuchando tópicos de sensores.");
-
-                while (true) {
-                    Thread.sleep(1000);
+                @Override
+                public void deliveryComplete(IMqttDeliveryToken token) {
                 }
-            } catch (MqttException e) {
-                retryCount++;
-                logger.error("Error de conexión MQTT. Reintentando en {}ms. Causa: {}", waitTime, e.getMessage());
-                try {
-                    Thread.sleep(waitTime);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            } catch (InterruptedException e) {
-                logger.warn("Aplicación interrumpida.");
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
+            });
 
-        if (retryCount >= maxRetries) {
-            logger.error("FATAL: Se agotaron los reintentos de conexión MQTT. Saliendo de la aplicación.");
+            logger.info("Intentando conectar a broker MQTT: {}", brokerUrl);
+            mqttClient.connect(options);
+            logger.info("¡Conexión MQTT exitosa!");
+            logger.info("IoTEste App iniciado. Escuchando tópicos de sensores.");
+
+            Thread.currentThread().join();
+
+        } catch (MqttException e) {
+            logger.error("Error fatal de conexión MQTT. Causa: {}", e.getMessage());
+        } catch (InterruptedException e) {
+            logger.warn("Aplicación interrumpida.");
+            Thread.currentThread().interrupt();
         }
     }
 
