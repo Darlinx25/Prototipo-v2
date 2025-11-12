@@ -47,28 +47,58 @@ public class App {
         this.controller = controller;
     }
 
-
     
     private String getSwitchStatus(String switchURL) throws IOException, InterruptedException {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(switchURL)).build();
-        HttpResponse<String> response = this.client.send(request, BodyHandlers.ofString());
+        int maxRetries = 5;
+        int retryCount = 0;
+        long waitTime = 2000;
 
-        return response.body();
+        while (true) {
+            try {
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(switchURL))
+                        .build();
+                HttpResponse<String> response = this.client.send(request, BodyHandlers.ofString());
+                return response.body();
+            } catch (IOException | InterruptedException e) {
+                retryCount++;
+                if (retryCount >= maxRetries) {
+                    logger.error("FATAL: No se pudo obtener estado del switch {} tras {} intentos. Causa: {}", switchURL, maxRetries, e.getMessage());
+                    throw e;
+                }
+                logger.warn("Falla al obtener estado de switch {}. Reintentando ({}/{}) en {}ms", switchURL, retryCount, maxRetries, waitTime);
+                Thread.sleep(waitTime);
+            }
+        }
     }
     
     
 
     private String postSwitchOp(String switchURL, String jsonBody) throws IOException, InterruptedException {
-        BodyPublisher bodyPublisher = BodyPublishers.ofString(jsonBody);
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(switchURL))
-                .header("Content-Type", "application/json")
-                .POST(bodyPublisher)
-                .build();
-        HttpResponse<String> response = this.client.send(request, BodyHandlers.ofString());
+        int maxRetries = 5;
+        int retryCount = 0;
+        long waitTime = 2000;
 
-        return response.body();
+        while (true) {
+            try {
+                BodyPublisher bodyPublisher = BodyPublishers.ofString(jsonBody);
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(switchURL))
+                        .header("Content-Type", "application/json")
+                        .POST(bodyPublisher)
+                        .build();
+                HttpResponse<String> response = this.client.send(request, BodyHandlers.ofString());
+                return response.body();
+            } catch (IOException | InterruptedException e) {
+                retryCount++;
+                if (retryCount >= maxRetries) {
+                    logger.error("FATAL: No se pudo enviar comando a switch {} tras {} intentos. Causa: {}", switchURL, maxRetries, e.getMessage());
+                    throw e;
+                }
+                logger.warn("Error al enviar comando a switch {}. Reintentando ({}/{}) en {}ms", switchURL, retryCount, maxRetries, waitTime);
+                Thread.sleep(waitTime);
+            }
+        }
     }
 
     private void start() {
@@ -82,6 +112,7 @@ public class App {
                 logger.info("Intentando cargar configuración del sitio... (Intento: {})", (retryCountSite + 1));
                 this.siteConfig = loadSiteConfig();
                 logger.info("Configuración del sitio cargada exitosamente.");
+                break;
             } catch (Exception e) {
                 retryCountSite++;
                 logger.error("Error al cargar la configuración del sitio. Reintentando en {}ms. Causa: {}", waitTimeSite, e.getMessage());
