@@ -334,8 +334,8 @@ public class App {
 
             Future<Void> future = commandExecutor.submit(() -> {
                 try {
+                    logger.info("Comando enviado: {} -> {}", switchURL, jsonCommand);
                     String response = postSwitchOp(switchURL, jsonCommand);
-                    logger.info("Comando OK: {} -> {}", switchURL, jsonCommand);
                 } catch (Exception e) {
                     logger.error("Falla REST al enviar comando a switch {}.", switchURL, e);
                 }
