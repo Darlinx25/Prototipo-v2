@@ -42,17 +42,14 @@ public class App {
         myApp.start();
     }
 
-    
     public void setController(Controller controller) {
         this.controller = controller;
     }
 
-    
     private String getSwitchStatus(String switchURL) throws IOException, InterruptedException {
         int maxRetries = 5;
         int retryCount = 0;
         long waitTime = 2000;
-
         while (true) {
             try {
                 HttpRequest request = HttpRequest.newBuilder()
@@ -71,14 +68,11 @@ public class App {
             }
         }
     }
-    
-    
 
     private String postSwitchOp(String switchURL, String jsonBody) throws IOException, InterruptedException {
         int maxRetries = 5;
         int retryCount = 0;
         long waitTime = 2000;
-
         while (true) {
             try {
                 BodyPublisher bodyPublisher = BodyPublishers.ofString(jsonBody);
@@ -102,11 +96,9 @@ public class App {
     }
 
     private void start() {
-        
         int maxRetriesSite = 10;
         int retryCountSite = 0;
         long waitTimeSite = 3000;
-        
         while (retryCountSite < maxRetriesSite) {
             try {
                 logger.info("Intentando cargar configuración del sitio... (Intento: {})", (retryCountSite + 1));
@@ -116,19 +108,18 @@ public class App {
             } catch (Exception e) {
                 retryCountSite++;
                 logger.error("Error al cargar la configuración del sitio. Reintentando en {}ms. Causa: {}", waitTimeSite, e.getMessage());
-                try{
+                try {
                     Thread.sleep(waitTimeSite);
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
                     return;
-                } 
+                }
             }
         }
-        
+
         this.knownSwitchStatus = getInitialSwitchesStatus();
         String brokerUrl = "tcp://localhost:1883";
         logger.info("Modo de Integración. Usando broker de cajaNegra en: {}", brokerUrl);
-
 
         String clientId = "app-" + UUID.randomUUID().toString();
         int maxRetries = 10;
@@ -145,7 +136,34 @@ public class App {
 
                 logger.info("Intentando conectar a broker: {} (Intento: {})", brokerUrl, (retryCount + 1));
 
-                mqttClient.setCallback(new MqttCallback() {
+                mqttClient.setCallback(new MqttCallbackExtended() {
+                    @Override
+                    public void connectComplete(boolean reconnect, String serverURI) {
+                        logger.info("Conexión MQTT {} con broker {}", (reconnect ? "reestablecida" : "exitosa"), serverURI);
+                        try {
+                            if (siteConfig != null && siteConfig.getRooms() != null) {
+                                Set<String> uniqueBaseTopics = new HashSet<>();
+                                for (Room room : siteConfig.getRooms()) {
+                                    String sensorTopic = room.getSensor();
+                                    if (sensorTopic == null || sensorTopic.isBlank()) continue;
+                                    if (sensorTopic.startsWith("mqtt:")) sensorTopic = sensorTopic.substring(5);
+                                    uniqueBaseTopics.add(sensorTopic);
+                                }
+                                for (String baseTopic : uniqueBaseTopics) {
+                                    String wildcardTopic = baseTopic + "/+";
+                                    logger.info("Suscribiendo a: {}", wildcardTopic);
+                                    mqttClient.subscribe(wildcardTopic, (topic, message) -> {
+                                        String payload = new String(message.getPayload());
+                                        handleSensorMessage(topic, payload);
+                                    });
+                                }
+                            } else {
+                                logger.warn("No hay configuración de siteConfig al reconectar MQTT.");
+                            }
+                        } catch (MqttException e) {
+                            logger.error("Error al re-suscribirse tras reconexión MQTT", e);
+                        }
+                    }
 
                     @Override
                     public void connectionLost(Throwable cause) {
@@ -155,8 +173,6 @@ public class App {
                     @Override
                     public void messageArrived(String topic, MqttMessage message) throws Exception {
                         String payload = new String(message.getPayload());
-                        logger.info("Mensaje recibido en tópico [{}]", topic);
-                        // --- CAMBIO CLAVE: Pasa el TÓPICO al handler ---
                         handleSensorMessage(topic, payload);
                     }
 
@@ -171,35 +187,26 @@ public class App {
 
                 if (siteConfig == null || siteConfig.getRooms() == null) {
                     logger.error("FATAL: No hay configuración de habitaciones para suscribir.");
-                    return; 
+                    return;
                 }
 
                 Set<String> uniqueBaseTopics = new HashSet<>();
                 for (Room room : siteConfig.getRooms()) {
-                    String sensorTopic = room.getSensor(); 
-
-                    if (sensorTopic == null || sensorTopic.isBlank()) {
-                        logger.warn("Advertencia: Habitación '{}' no tiene tópico de sensor definido.", room.getName());
-                        continue;
-                    }
-
-                    if (sensorTopic.startsWith("mqtt:")) {
-                        sensorTopic = sensorTopic.substring(5);
-                    }
-                    uniqueBaseTopics.add(sensorTopic); 
+                    String sensorTopic = room.getSensor();
+                    if (sensorTopic == null || sensorTopic.isBlank()) continue;
+                    if (sensorTopic.startsWith("mqtt:")) sensorTopic = sensorTopic.substring(5);
+                    uniqueBaseTopics.add(sensorTopic);
                 }
-                
+
                 for (String baseTopic : uniqueBaseTopics) {
-                    String wildcardTopic = baseTopic + "/+"; 
-                    
+                    String wildcardTopic = baseTopic + "/+";
                     logger.info("Suscribiendo a: {}", wildcardTopic);
-                    
                     mqttClient.subscribe(wildcardTopic, (topic, message) -> {
                         String payload = new String(message.getPayload());
-                        handleSensorMessage(topic, payload); 
+                        handleSensorMessage(topic, payload);
                     });
                 }
-                
+
                 logger.info("IoTEste App iniciado. Escuchando tópicos de sensores.");
 
                 while (true) {
@@ -225,11 +232,10 @@ public class App {
             logger.error("FATAL: Se agotaron los reintentos de conexión MQTT. Saliendo de la aplicación.");
         }
     }
-    
+
     public DataSite loadSiteConfig() throws Exception {
         String configURL = "http://localhost:8080/site-config";
         logger.info("Cargando configuración del sitio desde: {}", configURL);
-
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(configURL))
                 .GET()
@@ -238,43 +244,31 @@ public class App {
         return new DataSite(response.body());
     }
 
-
-    public void handleSensorMessage(String topic, String payload) {    
+    public void handleSensorMessage(String topic, String payload) {
         try {
             DataSensor sensorData = new DataSensor(payload);
-
-
             String roomName = null;
             String topicId = topic.substring(topic.lastIndexOf('/') + 1);
-
             for (Room room : siteConfig.getRooms()) {
                 String switchURL = room.getSwitchURL();
                 String switchId = switchURL.substring(switchURL.lastIndexOf('/') + 1);
-                
                 if (topicId.equals(switchId)) {
-                     roomName = room.getName();
-                     break;
+                    roomName = room.getName();
+                    break;
                 }
             }
-
             if (roomName == null) {
                 logger.warn("Error: Mensaje de tópico '{}' no se pudo mapear a una habitación. Topic ID: {}", topic, topicId);
-                return; 
+                return;
             }
-            
-            sensorData.setRoom(roomName); 
-
+            sensorData.setRoom(roomName);
             Context context = new Context(LocalDateTime.now());
             AppData appData = new AppData(siteConfig, sensorData, this.knownSwitchStatus, context);
-
             logger.info("--- INICIO DE PROCESAMIENTO ---");
             logger.info("Hora actual: {}", context.getCurrentTime());
             logger.info("-------------------------------");
-
             ControlResponse response = controller.powerManagement(appData);
-
             executeOperations(response.getOperations());
-
             for (Operation op : response.getOperations()) {
                 for (DataSwitch ds : this.knownSwitchStatus) {
                     if (ds.getSwitchURL().equals(op.getSwitchURL())) {
@@ -283,27 +277,20 @@ public class App {
                     }
                 }
             }
-
         } catch (Exception e) {
             logger.error("Error procesando mensaje o ejecutando control.", e);
         }
     }
 
-    
     public List<DataSwitch> getInitialSwitchesStatus() {
         List<DataSwitch> switches = new ArrayList<>();
-        if (siteConfig == null) {
-            return switches;
-        }
-
+        if (siteConfig == null) return switches;
         for (Room room : siteConfig.getRooms()) {
             String switchURL = room.getSwitchURL();
             try {
                 String jsonResponse = getSwitchStatus(switchURL);
-
                 DataSwitch status = parseSwitchStatus(switchURL, jsonResponse);
                 switches.add(status);
-
             } catch (Exception e) {
                 logger.warn("Falla REST al obtener estado inicial de switch {}. Se asume apagado.", switchURL, e);
                 switches.add(new DataSwitch(switchURL, false));
@@ -332,7 +319,7 @@ public class App {
     private String createSwitchCommand(boolean power) {
         return String.format("{\"state\": %b}", power);
     }
-    
+
     private String readJsonFileAsString(String filePath) throws IOException {
         return new String(Files.readAllBytes(Paths.get(filePath)));
     }
