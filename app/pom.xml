@@ -1,15 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
     <modelVersion>4.0.0</modelVersion>
+
     <parent>
         <groupId>com.ioteste</groupId>
         <artifactId>domotica</artifactId>
         <version>1.0-SNAPSHOT</version>
     </parent>
+
     <artifactId>app</artifactId>
     <packaging>jar</packaging>
 
+    <properties>
+        <exec.mainClass>com.ioteste.app.App</exec.mainClass>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+    </properties>
+
     <dependencies>
+        <!-- Logging -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
@@ -20,14 +32,15 @@
             <artifactId>logback-classic</artifactId>
             <version>1.4.14</version>
         </dependency>
-        
+
+        <!-- JSON -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
             <version>2.19.2</version>
-            <type>jar</type>
         </dependency>
-        
+
+        <!-- MQTT -->
         <dependency>
             <groupId>org.eclipse.paho</groupId>
             <artifactId>org.eclipse.paho.client.mqttv3</artifactId>
@@ -38,19 +51,29 @@
             <artifactId>org.eclipse.paho.mqtt.utility</artifactId>
             <version>1.1.0</version>
         </dependency>
-        
+
+        <!-- Internal control module -->
         <dependency>
             <groupId>com.ioteste</groupId>
             <artifactId>control</artifactId>
             <version>${project.version}</version>
         </dependency>
 
+        <!-- JUnit 5 -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-api</artifactId>
             <version>5.10.0</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <version>5.10.0</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Mockito -->
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-core</artifactId>
@@ -63,20 +86,18 @@
             <version>5.12.0</version>
             <scope>test</scope>
         </dependency>
+
+        <!-- Otros -->
         <dependency>
             <groupId>com.adaptiverecognition</groupId>
             <artifactId>ldap4j-slf4j-shim</artifactId>
             <version>1.0.0</version>
-            <type>jar</type>
         </dependency>
     </dependencies>
 
-    <properties>
-        <exec.mainClass>com.ioteste.app.App</exec.mainClass>
-    </properties>
-
     <build>
         <plugins>
+            <!-- Ejecutar App desde Maven -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
@@ -90,7 +111,8 @@
                     </jvmArgs>
                 </configuration>
             </plugin>
-            
+
+            <!-- Crear jar con dependencias -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
@@ -112,6 +134,17 @@
                     </execution>
                 </executions>
             </plugin>
+
+            <!-- Ejecutar tests con JUnit 5 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
+
 </project>
