@@ -23,7 +23,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.eclipse.paho.client.mqttv3.*;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 
@@ -43,6 +44,10 @@ public class App {
     private DataSite siteConfig;
 
     private List<DataSwitch> knownSwitchStatus = new ArrayList<>();
+    
+    private Map<String, Long> sensorHeartbeats = new ConcurrentHashMap<>();
+    
+    private static final long SENSOR_TIMEOUT_MS = 5000;
 
     private final Object switchLock = new Object();
     private final ExecutorService commandExecutor = Executors.newSingleThreadExecutor(r -> {
@@ -213,6 +218,8 @@ public class App {
             logger.info("IoTEste App iniciado. Escuchando tópicos de sensores.");
 
             startPeakHourMonitor();
+            
+            startSensorWatchdog();
 
             Thread.currentThread().join();
 
@@ -262,6 +269,7 @@ public class App {
                 logger.warn("Error: Mensaje de tópico '{}' no se pudo mapear a una habitación. Topic ID: {}", topic, topicId);
                 return;
             }
+            sensorHeartbeats.put(roomName, System.currentTimeMillis());
             sensorData.setRoom(roomName);
             Context context = new Context(LocalDateTime.now());
             List<DataSwitch> switchSnapshot = snapshotSwitchStatus();
@@ -438,4 +446,73 @@ public class App {
         }
     }
 
+    private void startSensorWatchdog() {
+        Thread watchdogThread = new Thread(() -> {
+            logger.info("Iniciando Watchdog de sensores (Timeout: {}ms)", SENSOR_TIMEOUT_MS);
+            
+            while (true) {
+                try {
+                    long now = System.currentTimeMillis();
+                    List<Operation> timeoutOperations = new ArrayList<>();
+
+                    if (siteConfig != null) {
+                        for (Room room : siteConfig.getRooms()) {
+                            String rName = room.getName();
+                            Long lastHeartbeat = sensorHeartbeats.get(rName);
+
+                            if (lastHeartbeat != null && (now - lastHeartbeat) > SENSOR_TIMEOUT_MS) {
+                              
+                                boolean isSwitchOn = false;
+                                synchronized (switchLock) {
+                                    for (DataSwitch ds : knownSwitchStatus) {
+                                        if (ds.getSwitchURL().equals(room.getSwitchURL())) {
+                                            isSwitchOn = ds.isActive();
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                if (isSwitchOn) {
+                                    logger.warn("ALERTA: Sensor en '{}' no responde hace {}ms. Apagando switch por seguridad.", 
+                                                rName, (now - lastHeartbeat));
+                                    timeoutOperations.add(new Operation(room.getSwitchURL(), false));
+                                }
+                            }
+                        }
+                    }
+
+                    
+                    if (!timeoutOperations.isEmpty()) {
+                        executeOperations(timeoutOperations);
+                        
+                        
+                        synchronized (switchLock) {
+                            for (Operation op : timeoutOperations) {
+                                for (DataSwitch ds : knownSwitchStatus) {
+                                    if (ds.getSwitchURL().equals(op.getSwitchURL())) {
+                                        ds.setActive(false);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    
+                    Thread.sleep(5000);
+
+                } catch (InterruptedException e) {
+                    logger.warn("Watchdog interrumpido");
+                    Thread.currentThread().interrupt();
+                    break;
+                } catch (Exception e) {
+                    logger.error("Error en hilo Watchdog", e);
+                }
+            }
+        });
+        
+        watchdogThread.setName("SensorWatchdog");
+        watchdogThread.setDaemon(true); 
+        watchdogThread.start();
+    }
 }
+
