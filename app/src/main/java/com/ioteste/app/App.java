@@ -64,7 +64,7 @@ public class App {
     private String getSwitchStatus(String switchURL) throws IOException, InterruptedException {
         int maxRetries = 5;
         int retryCount = 0;
-        long waitTime = 2000;
+        long waitTime = 5000;
         while (true) {
             try {
                 HttpRequest request = HttpRequest.newBuilder()
@@ -87,7 +87,7 @@ public class App {
     private String postSwitchOp(String switchURL, String jsonBody) throws IOException, InterruptedException {
         int maxRetries = 5;
         int retryCount = 0;
-        long waitTime = 2000;
+        long waitTime = 5000;
         while (true) {
             try {
                 BodyPublisher bodyPublisher = BodyPublishers.ofString(jsonBody);
@@ -97,6 +97,13 @@ public class App {
                         .POST(bodyPublisher)
                         .build();
                 HttpResponse<String> response = this.client.send(request, BodyHandlers.ofString());
+
+                if (response.statusCode() == 200 && response.body() != null && !response.body().isEmpty()) {
+                    logger.info("ACK recibido de {}: {}", switchURL, response.body());
+                } else {
+                    logger.warn("No se recibió ACK válido del switch {} (HTTP {})", switchURL, response.statusCode());
+                }
+
                 return response.body();
             } catch (IOException | InterruptedException e) {
                 retryCount++;
@@ -110,10 +117,11 @@ public class App {
         }
     }
 
+
     private void start() {
         int maxRetriesSite = 10;
         int retryCountSite = 0;
-        long waitTimeSite = 3000;
+        long waitTimeSite = 5000;
         while (retryCountSite < maxRetriesSite) {
             try {
                 logger.info("Intentando cargar configuración del sitio... (Intento: {})", (retryCountSite + 1));
