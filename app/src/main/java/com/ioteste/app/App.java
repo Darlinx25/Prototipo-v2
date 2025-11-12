@@ -72,21 +72,34 @@ public class App {
     }
 
     private void start() {
-        try {
-            this.siteConfig = loadSiteConfig();
-        } catch (Exception e) {
-            logger.error("FATAL: No se pudo cargar la configuración del sitio.", e);
-            return;
+        
+        int maxRetriesSite = 10;
+        int retryCountSite = 0;
+        long waitTimeSite = 3000;
+        
+        while (retryCountSite < maxRetriesSite) {
+            try {
+                logger.info("Intentando cargar configuración del sitio... (Intento: {})", (retryCountSite + 1));
+                this.siteConfig = loadSiteConfig();
+                logger.info("Configuración del sitio cargada exitosamente.");
+            } catch (Exception e) {
+                retryCountSite++;
+                logger.error("Error al cargar la configuración del sitio. Reintentando en {}ms. Causa: {}", waitTimeSite, e.getMessage());
+                try{
+                    Thread.sleep(waitTimeSite);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return;
+                } 
+            }
         }
-
+        
         this.knownSwitchStatus = getInitialSwitchesStatus();
-
         String brokerUrl = "tcp://localhost:1883";
         logger.info("Modo de Integración. Usando broker de cajaNegra en: {}", brokerUrl);
 
 
         String clientId = "app-" + UUID.randomUUID().toString();
-
         int maxRetries = 10;
         int retryCount = 0;
         long waitTime = 3000;
