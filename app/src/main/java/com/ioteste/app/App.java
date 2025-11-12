@@ -18,6 +18,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.eclipse.paho.client.mqttv3.*;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
@@ -27,15 +32,25 @@ import org.slf4j.LoggerFactory;
 
 public class App {
 
+    private String energyContract = EnergyCost.TEST_CONTRACT_30S;
+
     private static final Logger logger = LoggerFactory.getLogger(App.class);
 
     private HttpClient client = HttpClient.newHttpClient();
     private MqttClient mqttClient;
 
-    protected Controller controller = new DefaultController();    
+    protected Controller controller = new DefaultController();
     private DataSite siteConfig;
 
     private List<DataSwitch> knownSwitchStatus = new ArrayList<>();
+
+    private final Object switchLock = new Object();
+    private final ExecutorService commandExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r);
+        t.setName("switchCommandExecutor");
+        t.setDaemon(true);
+        return t;
+    });
 
     public static void main(String[] args) {
         App myApp = new App();
@@ -107,7 +122,11 @@ public class App {
                 break;
             } catch (Exception e) {
                 retryCountSite++;
-                logger.error("Error al cargar la configuración del sitio. Reintentando en {}ms. Causa: {}", waitTimeSite, e.getMessage());
+                String errorMsg = e.getMessage();
+                if (errorMsg == null) {
+                    errorMsg = "Destination unreachable.";
+                }
+                logger.error("Error al cargar la configuración del sitio. Reintentando en {}ms. Causa: {}", waitTimeSite, errorMsg);
                 try {
                     Thread.sleep(waitTimeSite);
                 } catch (InterruptedException ie) {
@@ -139,8 +158,12 @@ public class App {
                             Set<String> uniqueBaseTopics = new HashSet<>();
                             for (Room room : siteConfig.getRooms()) {
                                 String sensorTopic = room.getSensor();
-                                if (sensorTopic == null || sensorTopic.isBlank()) continue;
-                                if (sensorTopic.startsWith("mqtt:")) sensorTopic = sensorTopic.substring(5);
+                                if (sensorTopic == null || sensorTopic.isBlank()) {
+                                    continue;
+                                }
+                                if (sensorTopic.startsWith("mqtt:")) {
+                                    sensorTopic = sensorTopic.substring(5);
+                                }
                                 uniqueBaseTopics.add(sensorTopic);
                             }
                             for (String baseTopic : uniqueBaseTopics) {
@@ -162,7 +185,7 @@ public class App {
                 @Override
                 public void connectionLost(Throwable cause) {
                     logger.error("Conexión MQTT perdida, intentando reconectar...");
-                    
+
                 }
 
                 @Override
@@ -181,7 +204,19 @@ public class App {
             logger.info("¡Conexión MQTT exitosa!");
             logger.info("IoTEste App iniciado. Escuchando tópicos de sensores.");
 
+            startPeakHourMonitor();
+
             Thread.currentThread().join();
+
+            commandExecutor.shutdown();
+            try {
+                if (!commandExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                    commandExecutor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                commandExecutor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
 
         } catch (MqttException e) {
             logger.error("Error fatal de conexión MQTT. Causa: {}", e.getMessage());
@@ -221,17 +256,25 @@ public class App {
             }
             sensorData.setRoom(roomName);
             Context context = new Context(LocalDateTime.now());
-            AppData appData = new AppData(siteConfig, sensorData, this.knownSwitchStatus, context);
+            List<DataSwitch> switchSnapshot = snapshotSwitchStatus();
+            AppData appData = new AppData(siteConfig, sensorData, switchSnapshot, context);
+
             logger.info("--- INICIO DE PROCESAMIENTO ---");
             logger.info("Hora actual: {}", context.getCurrentTime());
             logger.info("-------------------------------");
+
             ControlResponse response = controller.powerManagement(appData);
             executeOperations(response.getOperations());
-            for (Operation op : response.getOperations()) {
-                for (DataSwitch ds : this.knownSwitchStatus) {
-                    if (ds.getSwitchURL().equals(op.getSwitchURL())) {
-                        ds.setActive(op.getPower());
-                        break;
+
+            if (!response.getOperations().isEmpty()) {
+                synchronized (switchLock) {
+                    for (Operation op : response.getOperations()) {
+                        for (DataSwitch ds : this.knownSwitchStatus) {
+                            if (ds.getSwitchURL().equals(op.getSwitchURL())) {
+                                ds.setActive(op.getPower());
+                                break;
+                            }
+                        }
                     }
                 }
             }
@@ -242,7 +285,9 @@ public class App {
 
     public List<DataSwitch> getInitialSwitchesStatus() {
         List<DataSwitch> switches = new ArrayList<>();
-        if (siteConfig == null) return switches;
+        if (siteConfig == null) {
+            return switches;
+        }
         for (Room room : siteConfig.getRooms()) {
             String switchURL = room.getSwitchURL();
             try {
@@ -263,17 +308,32 @@ public class App {
     }
 
     private void executeOperations(List<Operation> operations) {
-        if (operations.isEmpty()) {
+        if (operations == null || operations.isEmpty()) {
             logger.info("No operations");
             return;
         }
         for (Operation op : operations) {
-            String jsonCommand = createSwitchCommand(op.getPower());
+            final String switchURL = op.getSwitchURL();
+            final String jsonCommand = createSwitchCommand(op.getPower());
+
+            Future<Void> future = commandExecutor.submit(() -> {
+                try {
+                    String response = postSwitchOp(switchURL, jsonCommand);
+                    logger.info("Comando OK: {} -> {}", switchURL, jsonCommand);
+                } catch (Exception e) {
+                    logger.error("Falla REST al enviar comando a switch {}.", switchURL, e);
+                }
+                return null;
+            });
+
             try {
-                String response = postSwitchOp(op.getSwitchURL(), jsonCommand);
-                logger.info("Comando OK: {} -> {}", op.getSwitchURL(), jsonCommand);
-            } catch (Exception e) {
-                logger.error("Falla REST al enviar comando a switch {}.", op.getSwitchURL(), e);
+                future.get();
+            } catch (ExecutionException ee) {
+                logger.error("Error executing switch command for {}: {}", switchURL, ee.getCause().getMessage());
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                logger.warn("Interrupted while sending command to {}", switchURL);
+                break;
             }
         }
     }
@@ -285,4 +345,89 @@ public class App {
     private String readJsonFileAsString(String filePath) throws IOException {
         return new String(Files.readAllBytes(Paths.get(filePath)));
     }
+
+    private void startPeakHourMonitor() {
+
+        Thread peakMonitorThread = new Thread(() -> {
+            logger.info("Starting peak-hour monitor thread using contract: {}", energyContract);
+            boolean lastWasPeak = false;
+
+            while (true) {
+                try {
+                    EnergyCost.EnergyZone zone = EnergyCost.currentEnergyZone(energyContract);
+                    boolean isPeak = (zone.current() == EnergyCost.HIGH);
+
+                    if (isPeak && !lastWasPeak) {
+                        logger.info("Entering peak hours — turning off all switches.");
+                        turnOffAllSwitches();
+                    } else if (!isPeak && lastWasPeak) {
+                        logger.info("Leaving peak hours — normal operation resumed.");
+                    }
+
+                    lastWasPeak = isPeak;
+
+                    long delay = zone.nextTS() - System.currentTimeMillis() + 1000;
+                    if (delay < 0) {
+                        delay = 5000;
+                    }
+                    Thread.sleep(delay);
+
+                } catch (InterruptedException e) {
+                    logger.warn("Peak-hour monitor interrupted.");
+                    Thread.currentThread().interrupt();
+                    break;
+                } catch (Exception e) {
+                    logger.error("Error in peak-hour monitor thread", e);
+                    try {
+                        Thread.sleep(5000);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
+        });
+        peakMonitorThread.setName("peakMonitorThread");
+        peakMonitorThread.setDaemon(true);
+        peakMonitorThread.start();
+    }
+
+    private void turnOffAllSwitches() {
+        List<Operation> operations = new ArrayList<>();
+
+        synchronized (switchLock) {
+            for (DataSwitch s : this.knownSwitchStatus) {
+                if (s.isActive()) {
+                    operations.add(new Operation(s.getSwitchURL(), false));
+                }
+            }
+        }
+
+        if (!operations.isEmpty()) {
+            executeOperations(operations);
+
+            synchronized (switchLock) {
+                for (Operation op : operations) {
+                    for (DataSwitch ds : this.knownSwitchStatus) {
+                        if (ds.getSwitchURL().equals(op.getSwitchURL())) {
+                            ds.setActive(false);
+                        }
+                    }
+                }
+            }
+        }
+
+        logger.info("All active switches turned off due to peak hours.");
+    }
+
+    private List<DataSwitch> snapshotSwitchStatus() {
+        synchronized (switchLock) {
+            List<DataSwitch> copy = new ArrayList<>(this.knownSwitchStatus.size());
+            for (DataSwitch ds : this.knownSwitchStatus) {
+                copy.add(new DataSwitch(ds.getSwitchURL(), ds.isActive()));
+            }
+            return copy;
+        }
+    }
+
 }
