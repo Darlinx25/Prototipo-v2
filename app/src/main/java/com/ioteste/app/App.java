@@ -367,18 +367,25 @@ public class App {
         Thread peakMonitorThread = new Thread(() -> {
             logger.info("Starting peak-hour monitor thread using contract: {}", energyContract);
             boolean lastWasPeak = false;
+            boolean justStarted = true;
 
             while (true) {
                 try {
                     EnergyCost.EnergyZone zone = EnergyCost.currentEnergyZone(energyContract);
                     boolean isPeak = (zone.current() == EnergyCost.HIGH);
 
-                    if (isPeak && !lastWasPeak) {
+                    if (isPeak && !lastWasPeak && !justStarted) {
                         logger.info("Entering peak hours — turning off all switches.");
                         turnOffAllSwitches();
-                    } else if (!isPeak && lastWasPeak) {
+                    } else if (!isPeak && lastWasPeak && !justStarted) {
                         logger.info("Leaving peak hours — normal operation resumed.");
-                    }
+                    } else if (isPeak && justStarted) {
+                        logger.info("App started in peak hours.");
+                        justStarted = false;
+                    } else if (!isPeak && justStarted) {
+                        logger.info("App started in non-peak hours.");
+                        justStarted = false;
+                    } 
 
                     lastWasPeak = isPeak;
 
